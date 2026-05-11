@@ -6,6 +6,11 @@
 
 #include "dp.h"
 
+//concurrency并发数，默认0时使用当前可用线程数的一半
+inline uint Concurrency(int concurrency) {
+	uint threads = std::thread::hardware_concurrency();
+	return concurrency == 0 ? std::max(static_cast<uint>(1), threads / 2) : concurrency;
+}
 
 /*
 *onnxruntime的模型加载
@@ -23,7 +28,7 @@ public:
 	OnnxLoaderCPU();
 
 	//加载模型
-	void load(const char* path);
+	void load(const char* path, const char* cfg = nullptr);
 
 	//返回会话
 	Ort::Session& get(){
@@ -39,7 +44,7 @@ OnnxLoaderCPU<concurrency>::OnnxLoaderCPU():session(nullptr),env(nullptr)
 }
 
 template <uint concurrency>
-void OnnxLoaderCPU<concurrency>::load(const char* path)
+void OnnxLoaderCPU<concurrency>::load(const char* path, const char* cfg)
 {
 	//Ort环境
 	env=Ort::Env(ORT_LOGGING_LEVEL_WARNING, "yolo");
@@ -49,10 +54,7 @@ void OnnxLoaderCPU<concurrency>::load(const char* path)
 	sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
 
 
-	//设置线程数
-	auto threads = std::thread::hardware_concurrency();
-	//使用一半的逻辑线程数来运算矩阵
-	uint count= concurrency == 0 ? std::max(static_cast<uint>(1), threads / 2) : concurrency;
+	uint count= Concurrency(concurrency);
 
 	log_info("Onnx推理并发数: {0}", count);
 
@@ -138,12 +140,10 @@ public:
 	}
 
 	//加载模型
-	void load(const char* path) override{
+	void load(const char* path, const char* cfg = nullptr) override{
 		net = cv::dnn::readNetFromONNX(path);
 
-		auto threads = std::thread::hardware_concurrency();
-		//使用一半的逻辑线程数来运算矩阵
-		uint count= concurrency == 0 ? std::max(static_cast<uint>(1), threads / 2) : concurrency;
+		uint count= Concurrency(concurrency);
 
 		// 设置计算后端和线程数
         net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);

@@ -61,7 +61,7 @@ typedef std::vector<std::vector<SegmentRes>> SegmentResArray;
 template<typename _Model>
 class ModelLoaderBase{
 public:
-	virtual void load(const char* path) = 0;
+	virtual void load(const char* path, const char* cfg = nullptr) = 0;
 	virtual _Model& get() = 0;
 	virtual void getSize(cv::Vec4i& inputSize, std::vector<std::vector<int>>& outputSize) = 0;
 
@@ -193,17 +193,17 @@ class _DPBase {
 		}
 
 		//加载模型
-		void loadModel(const char* path) {
+		void loadModel(const char* path, const char* cfg=nullptr) {
 			log_info("DPDetector加载模型: {0}", path);
 
-			_modelLoader.load(path);
+			_modelLoader.load(path, cfg);
 			//获取模型输入大小
 			_modelLoader.getSize(_inputSize, _outputSize);
 
 			
 			log_info("模型输入大小: [{0},{1},{2},{3}]", _inputSize[0], _inputSize[1], _inputSize[2], _inputSize[3]);
 			
-			log_info("模型输出大小: ");
+			log_info("模型输出{0}: ", _outputSize.size());
 			for (size_t i = 0; i < _outputSize.size(); ++i) {
 				log_info("======输出{0}: [{1}]", i, fmt::join(_outputSize[i], ","));
 			}

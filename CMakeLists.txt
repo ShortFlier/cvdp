@@ -1,4 +1,6 @@
-﻿cmake_minimum_required (VERSION 3.8)
+﻿cmake_minimum_required(VERSION 3.12)
+
+project("dpdetect")
 
 enable_language(CXX)
 
@@ -17,21 +19,32 @@ link_directories("D:\\gw\\opencv\\opencv\\build\\x64\\vc16\\lib")
 set(SPDLOG_DIR "D:/gw/clib/spdlog/spdlog-1.15.1/include")
 include_directories(${SPDLOG_DIR})
 
-
 # onnxruntime c++
 set(ONNX_DLL_DIR "D:/gw/clib/onnxruntime-win-x64-1.24.4/lib")
 include_directories("D:\\gw\\clib\\onnxruntime-win-x64-1.24.4\\include")
 link_directories(${ONNX_DLL_DIR})
 
-project ("dpdetect")
+project("dpdetect")
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 将源代码添加到此项目的可执行文件。
-add_executable (dpdetect  
-                "dp.h"
-                "yolov8.h" "yolov8.cpp"
-                "dputility.h" "dputility.cpp"
-                "log.h" "log.cpp"
-                "demo.cpp"
+add_subdirectory(log)
+add_subdirectory(dp)
+
+add_executable(dpdetect
+    demo.cpp
+)
+
+target_include_directories(dpdetect PRIVATE
+    ${CMAKE_SOURCE_DIR}/dp
+    ${CMAKE_SOURCE_DIR}/log
+)
+
+target_link_libraries(dpdetect PRIVATE
+    dp
+    opencv_world480d.lib
+    onnxruntime.lib
+    onnxruntime_providers_shared.lib
 )
 
 # 拷贝dll到exe文件目录
@@ -44,14 +57,3 @@ add_custom_command(TARGET dpdetect POST_BUILD
         "$<TARGET_FILE_DIR:dpdetect>/"
     COMMENT "Copying ONNX Runtime DLLs to output directory..."
 )
-
-# 链接库 - 移除 spdlog::spdlog，因为现在是头文件-only
-target_link_libraries(dpdetect PRIVATE 
-    opencv_world480d.lib 
-    onnxruntime.lib 
-    onnxruntime_providers_shared.lib
-)
-
-if (CMAKE_VERSION VERSION_GREATER 3.12)
-  set_property(TARGET dpdetect PROPERTY CXX_STANDARD 20)
-endif()

@@ -11,20 +11,30 @@
 
 项目设计注重扩展性，方便后续接入更多模型格式或推理框架。
 
-## 主要特性
+## 新结构说明
 
-- 支持 OpenCV DNN 模型加载与推理
-- 支持 ONNX Runtime C++ 接口进行 ONNX 模型推理
-- 内部日志机制可根据需求自行修改
-- 代码结构清晰，便于扩展与定制
+本次重构后，项目分为两个子项目：
+
+- `log/` - 日志模块子项目，包含 `log.h` 和 `log.cpp`
+- `dp/` - 推理功能子项目，包含 `dp.h`、`dputility.h`、`dputility.cpp`、`yolov8.h`、`yolov8.cpp`
+
+`demo.cpp` 保持在项目根目录，作为程序入口文件。
 
 ## 目录结构
 
 - `demo.cpp` - 演示程序入口
-- `dp.h` / `dputility.cpp` / `dputility.h` - 封装的推理功能与工具函数
-- `yolov8.cpp` / `yolov8.h` - YOLOv8 相关推理实现
-- `log.cpp` / `log.h` - 日志处理模块
-- `CMakeLists.txt` - CMake 构建配置
+- `dp/` - 推理功能子项目
+  - `dp.h`
+  - `dputility.h`
+  - `dputility.cpp`
+  - `yolov8.h`
+  - `yolov8.cpp`
+- `log/` - 日志模块子项目
+  - `log.h`
+  - `log.cpp`
+- `CMakeLists.txt` - 根级别 CMake 配置
+- `dp/CMakeLists.txt` - `dp` 子项目配置
+- `log/CMakeLists.txt` - `log` 子项目配置
 
 ## 快速开始
 
@@ -42,7 +52,7 @@ cmake --build .
 
 ## 日志说明
 
-项目内部已包含日志模块，方便输出运行信息和调试内容。日志实现可根据项目需求进行替换或扩展。
+日志模块已拆分为独立子项目 `log/`，方便单独维护和替换。
 
 ## 扩展建议
 
@@ -52,4 +62,4 @@ cmake --build .
 
 ---
 
-如果你需要进一步定制 `dpdetect`，可以在 `dputility` 和 `yolov8` 模块中拓展推理逻辑、添加更多日志选项。
+如果你需要进一步定制 `dpdetect`，可以在 `dp/` 子项目中拓展推理逻辑，并在 `log/` 子项目中扩展日志功能。

@@ -4,7 +4,19 @@
 
 #include <opencv2/opencv.hpp>
 
-#include "dputility.h"
+#include "log.h"
+
+
+#include <chrono>
+
+#define ELAPSED(str, exe)                                                     \
+    do {                                                                      \
+        auto __start = std::chrono::high_resolution_clock::now();             \
+        exe;                                                                   \
+        auto __end = std::chrono::high_resolution_clock::now();               \
+        auto __duration = std::chrono::duration_cast<std::chrono::microseconds>(__end - __start).count(); \
+        log_info("{0}耗时：{1}ms", str, __duration / 1000.0); \
+    } while(0)
 
 
 /*
@@ -39,13 +51,83 @@ struct SegmentRes {
 };
 typedef std::vector<std::vector<SegmentRes>> SegmentResArray;
 
+
+/*
+	深度学习模型加载类
+		load，加载模型
+		get，返回可用模型
+		getSize， 返回模型输入输出尺寸
+*/
+template<typename _Model>
+class ModelLoaderBase{
+public:
+	virtual void load(const char* path) = 0;
+	virtual _Model& get() = 0;
+	virtual void getSize(cv::Vec4i& inputSize, std::vector<std::vector<int>>& outputSize) = 0;
+
+	virtual ~ModelLoaderBase(){};
+};
+
+
+/*
+	图像归一化器
+	  函数符operator()，归一化图像，转为张量
+*/
+class NormalizerBase{
+public:
+	virtual cv::Mat operator()(const cv::Mat& src, const cv::Size& targetSize, float scalefactor, const cv::Scalar& mean, bool swapRB) = 0;
+
+	virtual ~NormalizerBase(){};
+};
+
+
+/*
+	模型运行器
+		函数符operator()，使用模型进行推理，返回结果张量
+*/
+template<typename _model>
+class RunnerBase{
+public:
+	virtual std::vector<cv::Mat> operator()( _model& model,  cv::Mat& input) = 0;
+
+	virtual ~RunnerBase(){};
+};
+
+
+/*
+	结果解析器
+		函数符operator()，解析模型输出的结果张量，返回结果数组
+*/
+template<typename _Result>
+class ParserBase{
+public:
+	virtual _Result operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, cv::Size inputSize,
+								const std::vector<std::vector<int>>& outputSizes, int classNum,
+								const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs) = 0;
+
+	virtual ~ParserBase(){};
+};
+
 /*
 	深度学习检测模型功能类
-	_ModelLoader模型加载器，函数load加载模型，函数get返回可用模型，函数getSize返回模型输入尺寸
-	_Normalizer图像归一化器，函数符operator()返回归一化张量
-	_Runner运行器，函数符operator()使用模型运算，返回结果张量
-	_Parser解析器，函数符operator()解析结果，返回结果数组
-	_Result结果数组类型，DetectResArray或SegmentResArray
+
+	@_ModelLoader 模型加载器
+		参考 ModelLoaderBase 自定义，必须可以调用load，get，getSize函数
+
+
+
+	@_Normalizer图像归一化器
+		必须是可以调用的函数对象，参考 NormalizerBase
+
+
+	@_Runner运行器，返回结果张量
+		必须是可以调用的函数对象，参考 RunnerBase
+
+
+	@_Parser解析器，，返回结果数组
+		必须是可以调用的函数对象，参考 ParserBase
+
+	@_Result结果数组类型，DetectResArray或SegmentResArray
 */
 template<typename _ModelLoader,
 	typename _Normalizer,
@@ -117,6 +199,14 @@ class _DPBase {
 			_modelLoader.load(path);
 			//获取模型输入大小
 			_modelLoader.getSize(_inputSize, _outputSize);
+
+			
+			log_info("模型输入大小: [{0},{1},{2},{3}]", _inputSize[0], _inputSize[1], _inputSize[2], _inputSize[3]);
+			
+			log_info("模型输出大小: ");
+			for (size_t i = 0; i < _outputSize.size(); ++i) {
+				log_info("======输出{0}: [{1}]", i, fmt::join(_outputSize[i], ","));
+			}
 		}
 
 		//推理，获取结果

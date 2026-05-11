@@ -4,13 +4,13 @@
 
 
 DetectResArray Yolov8DetectResultParser::operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, cv::Size inputSize,
-	std::vector<std::vector<int>> outputSizes, int classNum, std::vector<float>& socreThreshs, std::vector<float>& nmsThreshs)
+	const std::vector<std::vector<int>>& outputSizes, int classNum, const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs)
 {
 	DetectResArray resArr(classNum);
 
 	//只有一个输出
 	cv::Mat& outputMat = outputs.at(0);
-	std::vector<int>& outputSize = outputSizes.at(0);
+	const std::vector<int>& outputSize = outputSizes.at(0);
 
 	//yolov8输出格式[1，类别属性，预测数]
 	outputMat=outputMat.reshape(1, outputSize.at(0) * outputSize.at(1));
@@ -49,7 +49,7 @@ DetectResArray Yolov8DetectResultParser::operator()(std::vector<cv::Mat>& output
 
 
 SegmentResArray Yolov8SegmentResultParser::operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, cv::Size inputSize,
-	 std::vector<std::vector<int>> outputSizes,	int classNum, std::vector<float>& socreThreshs, std::vector<float>& nmsThreshs)
+	 const std::vector<std::vector<int>>& outputSizes,	int classNum, const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs)
 {
 	SegmentResArray resArr(classNum);
 
@@ -142,3 +142,5 @@ SegmentResArray Yolov8SegmentResultParser::operator()(std::vector<cv::Mat>& outp
 
 	return resArr;
 }
+
+

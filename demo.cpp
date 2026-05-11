@@ -40,7 +40,9 @@ void testDetector() {
 	const char* modelPath = R"(C:\Users\qiang\runs\detect\runs\yolov8s_singleclass_onebox_bbox_3g7\weights\best.onnx)";
 	const char* imgPath = R"(C:\Users\qiang\Desktop\document\20251026_131759_465_155.jpg)";
 
-	yolov8OnnxCPUDetector<> detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
+	//yolov8OnnxCPUDetector<> detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
+	yolov8CVDNNCPUDetector<> detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
+	detector._modelLoader.setInputSize(1, 3, 512, 512);
 
 	detector.setNormalizeParam(1.0 / 255.0);
 
@@ -62,7 +64,9 @@ void testSegmenter() {
 	const char* modelPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\output\weights\best.onnx)";
 	const char* imgPath = R"(C:\Users\qiang\Desktop\document\20251026_131759_465_155.jpg)";
 
-	yolov8OnnxCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
+	//yolov8OnnxCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
+	yolov8CVDNNCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
+	segmenter._modelLoader.setInputSize(1, 3, 640, 640);
 
 	segmenter.setNormalizeParam(1.0 / 255.0);
 	segmenter.loadModel(modelPath);
@@ -79,8 +83,8 @@ int main()
 {
 	logInit(Log_Level::info);
 
-	testDetector();
-	//testSegmenter();
+	//testDetector();
+	testSegmenter();
 
 	cv::waitKey();
 

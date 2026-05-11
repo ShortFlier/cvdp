@@ -83,3 +83,18 @@ cv::Rect scaleRect(const cv::Rect& box, const cv::Size& fromSize, const cv::Size
 
 	return cv::Rect(x, y, width, height);
 }
+
+
+std::vector<cv::Mat> CVDNNRunner::operator()( DnnNet& net,  cv::Mat& blob) {
+	// 设置输入数据
+	net.setInput(blob);
+
+	//获取输出层
+	std::vector<std::string> outputLayerNames = net.getUnconnectedOutLayersNames();
+
+	// 执行推理
+	std::vector<cv::Mat> outputs;
+	net.forward(outputs, outputLayerNames);
+
+	return outputs;
+}

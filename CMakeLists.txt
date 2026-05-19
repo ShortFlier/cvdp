@@ -14,8 +14,7 @@ endif()
 include_directories("D:\\gw\\opencv\\opencv\\build\\include")
 link_directories("D:\\gw\\opencv\\opencv\\build\\x64\\vc16\\lib")
 
-# spdlog - 使用头文件-only 模式
-# 不要使用 find_package，直接包含头文件路径
+# spdlog 头文件包含形式，可以预编译spdlog库
 set(SPDLOG_DIR "D:/gw/clib/spdlog/spdlog-1.15.1/include")
 include_directories(${SPDLOG_DIR})
 

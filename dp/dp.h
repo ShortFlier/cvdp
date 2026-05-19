@@ -171,10 +171,13 @@ class _DPBase {
 		_DPBase(int classNum, const std::vector<float>& threshs = std::vector<float>(),
 			const std::vector<float>& nmsThreshs = std::vector<float>())
 			:_classNum(classNum), _threshs(std::move(threshs)), _nmsThreshs(std::move(nmsThreshs)) {
-			for (int i = 0; i < (_classNum - _threshs.size()); ++i){
+			int needThresh = _classNum - static_cast<int>(_threshs.size());
+			for (int i = 0; i < needThresh; ++i) {
 				_threshs.push_back(0.5);
 			}
-			for (int i = 0; i < (_classNum - _nmsThreshs.size()); ++i){
+
+			int needNms = _classNum - static_cast<int>(_nmsThreshs.size());
+			for (int i = 0; i < needNms; ++i) {
 				_nmsThreshs.push_back(0.4);
 			}
 

@@ -26,6 +26,7 @@ DetectResArray Yolov8DetectResultParser::operator()(std::vector<cv::Mat>& output
 
 		//对应原图矩形框大小
 		cv::Rect box = oriRect(oriSize, inputSize, cx, cy, w, h);
+		box = rectValidate(box, oriSize);
 
 		for (int i = 0; i < classNum; ++i) {
 			boxs[i].push_back(box);
@@ -80,6 +81,7 @@ SegmentResArray Yolov8SegmentResultParser::operator()(std::vector<cv::Mat>& outp
 		float h = predMat.at<float>(3, c);
 
 		cv::Rect box = rect(cx, cy, w, h);
+		box = rectValidate(box, oriSize);
 		outputBoxs.push_back(box);
 
 		for (int i = 0; i < classNum; ++i) {

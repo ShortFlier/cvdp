@@ -121,7 +121,8 @@ inline cv::Rect rect(double cx, double cy, double w, double h) {
 //将矩形框从一个尺寸缩放到另一个尺寸
 cv::Rect scaleRect(const cv::Rect& box, const cv::Size& fromSize, const cv::Size& toSize);
 
-
+//将矩形框限制在图片范围内
+cv::Rect rectValidate(const cv::Rect& box, const cv::Size& size);
 
 /*	opencv::dnn模块读取onnx模型的模型读取器
 	使用CPU推理

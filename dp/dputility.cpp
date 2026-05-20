@@ -84,6 +84,16 @@ cv::Rect scaleRect(const cv::Rect& box, const cv::Size& fromSize, const cv::Size
 	return cv::Rect(x, y, width, height);
 }
 
+cv::Rect rectValidate(const cv::Rect& box, const cv::Size& size){
+	cv::Rect validBox = box;
+	//宽高至少为1
+	validBox.width = std::max(validBox.width, 1);
+	validBox.height = std::max(validBox.height, 1);
+
+	cv::Rect imgRect(0, 0, size.width, size.height);
+	return validBox & imgRect; // 取交集，确保在图片范围内
+}
+
 
 std::vector<cv::Mat> CVDNNRunner::operator()( DnnNet& net,  cv::Mat& blob) {
 	// 设置输入数据

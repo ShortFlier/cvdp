@@ -24,9 +24,7 @@ DetectResArray Yolov8DetectResultParser::operator()(std::vector<cv::Mat>& output
 		float w = outputMat.at<float>(2, c);
 		float h = outputMat.at<float>(3, c);
 
-		//对应原图矩形框大小
-		cv::Rect box = oriRect(oriSize, inputSize, cx, cy, w, h);
-		box = rectValidate(box, oriSize);
+		cv::Rect box = rect(cx, cy, w, h);
 
 		for (int i = 0; i < classNum; ++i) {
 			boxs[i].push_back(box);
@@ -40,14 +38,16 @@ DetectResArray Yolov8DetectResultParser::operator()(std::vector<cv::Mat>& output
 
 		for (int j = 0; j < indexs.size(); ++j) {
 			int index = indexs[j];
-			resArr[i].push_back(DetectRes(boxs[i][index], scores[i][index]));
+
+			//对应原图矩形框大小
+			cv::Rect box = enSimpleLetterBoxRect(oriSize, inputSize, boxs[i][index]);
+
+			resArr[i].push_back(DetectRes(box, scores[i][index]));
 		}
 	}
 
 	return resArr;
 }
-
-
 
 SegmentResArray Yolov8SegmentResultParser::operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, cv::Size inputSize,
 	 const std::vector<std::vector<int>>& outputSizes,	int classNum, const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs)
@@ -81,7 +81,7 @@ SegmentResArray Yolov8SegmentResultParser::operator()(std::vector<cv::Mat>& outp
 		float h = predMat.at<float>(3, c);
 
 		cv::Rect box = rect(cx, cy, w, h);
-		box = rectValidate(box, oriSize);
+		box = rectValidate(box, inputSize);
 		outputBoxs.push_back(box);
 
 		for (int i = 0; i < classNum; ++i) {
@@ -106,6 +106,9 @@ SegmentResArray Yolov8SegmentResultParser::operator()(std::vector<cv::Mat>& outp
 	int seg_h=outputSizes[1][2];
 	int seg_w=outputSizes[1][3];
 
+	SimpleLetterBox letterbox(oriSize, inputSize, cv::Scalar(114, 114, 114));
+	cv::Vec4d params = letterbox.params();
+
 	for(int i=0; i<classNum; ++i) {
 		for(int j=0; j<classIndexs[i].size(); ++j) {
 			int index=classIndexs[i][j];
@@ -113,32 +116,60 @@ SegmentResArray Yolov8SegmentResultParser::operator()(std::vector<cv::Mat>& outp
 			/*
 				提取掩膜特征图对应区域，计算分割掩膜，减少计算量
 			*/
-			//映射到分割特征图上的矩形框
-			cv::Rect protoRect=scaleRect(outputBoxs[index], inputSize, cv::Size(seg_w, seg_h));
+			cv::Rect oriRect = letterbox.enRect(outputBoxs[index]);
+			int net_width = inputSize.width;
+			int net_height = inputSize.height;
+
+			int rang_x = static_cast<int>(std::floor((oriRect.x * params[0] + params[2]) / net_width * seg_w));
+			int rang_y = static_cast<int>(std::floor((oriRect.y * params[1] + params[3]) / net_height * seg_h));
+			int rang_w = static_cast<int>(std::ceil(((oriRect.x + oriRect.width) * params[0] + params[2]) / net_width * seg_w)) - rang_x;
+			int rang_h = static_cast<int>(std::ceil(((oriRect.y + oriRect.height) * params[1] + params[3]) / net_height * seg_h)) - rang_y;
+
+			rang_w = std::max(rang_w, 1);
+			rang_h = std::max(rang_h, 1);
+			if (rang_x + rang_w > seg_w) {
+				if (seg_w - rang_x > 0)
+					rang_w = seg_w - rang_x;
+				else
+					rang_x -= 1;
+			}
+			if (rang_y + rang_h > seg_h) {
+				if (seg_h - rang_y > 0)
+					rang_h = seg_h - rang_y;
+				else
+					rang_y -= 1;
+			}
 
 			std::vector<cv::Range> ranges;
 			ranges.push_back(cv::Range(0, 1));
-    		ranges.push_back(cv::Range::all());
-			ranges.push_back(cv::Range(protoRect.y, protoRect.y + protoRect.height));
-			ranges.push_back(cv::Range(protoRect.x, protoRect.x + protoRect.width));
+			ranges.push_back(cv::Range::all());
+			ranges.push_back(cv::Range(rang_y, rang_y + rang_h));
+			ranges.push_back(cv::Range(rang_x, rang_x + rang_w));
 
 			cv::Mat temp_mask_protos = mask_protos(ranges).clone();
-			temp_mask_protos=temp_mask_protos.reshape(0, {seg_c, protoRect.height * protoRect.width});
+			temp_mask_protos = temp_mask_protos.reshape(0, {seg_c, rang_w * rang_h});
 			cv::Mat ceof(ceofs[index].t());
 
-			cv::Mat mask = ceof * temp_mask_protos;
-			mask = mask.reshape(0, protoRect.height);
+						cv::Mat mask_feature = ceof * temp_mask_protos;
+			mask_feature = mask_feature.reshape(0, rang_h);
 
 			cv::Mat dest;
-			cv::exp(-mask, dest);	//sigmoid函数
-			dest= 1.0 / (1.0 + dest);
+			cv::exp(-mask_feature, dest);
+			dest = 1.0 / (1.0 + dest);
 
-			//映射回原图像
-			cv::Rect oriRect=scaleRect(outputBoxs[index], inputSize, oriSize);
+			int left = static_cast<int>(std::floor((net_width / static_cast<double>(seg_w) * rang_x - params[2]) / params[0]));
+			int top = static_cast<int>(std::floor((net_height / static_cast<double>(seg_h) * rang_y - params[3]) / params[1]));
+			int width = static_cast<int>(std::ceil(net_width / static_cast<double>(seg_w) * rang_w / params[0]));
+			int height = static_cast<int>(std::ceil(net_height / static_cast<double>(seg_h) * rang_h / params[1]));
+
+			cv::Mat maskPatch;
+			cv::resize(dest, maskPatch, cv::Size(width, height), cv::INTER_NEAREST);
+			cv::Mat finalMask = maskPatch(oriRect - cv::Point(left, top));
+
 			cv::Mat oriMask;
-			cv::resize(dest, oriMask, oriRect.size());
-			oriMask.convertTo(oriMask, CV_8UC1, 255);
+			finalMask.convertTo(oriMask, CV_8UC1, 255);
 			resArr[i].push_back(SegmentRes(oriRect,  scores[i][index], oriMask));
+
 		}
 	}
 

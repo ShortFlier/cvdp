@@ -12,6 +12,95 @@ inline uint Concurrency(int concurrency) {
 	return concurrency == 0 ? std::max(static_cast<uint>(1), threads / 2) : concurrency;
 }
 
+
+
+//根据中心点坐标和宽高生成矩形框
+inline cv::Rect rect(double cx, double cy, double w, double h) {
+	return cv::Rect(cv::Point(cx - w / 2, cy - h / 2), cv::Size(w, h));
+}
+
+//将矩形框从一个尺寸缩放到另一个尺寸
+cv::Rect scaleRect(const cv::Rect& box, const cv::Size& fromSize, const cv::Size& toSize);
+
+//将矩形框限制在图片范围内
+cv::Rect rectValidate(const cv::Rect& box, const cv::Size& size);
+
+
+/*
+* @param oriSize 原图片大小
+* @param inputSize 模型输入图片大小
+* @param cx，cy，w，h矩形框中心位置x,中心位置y，宽高，对应输入图片中的矩形框
+*
+* @note 将输入图片中的矩形框转为原始图片中的矩形框
+*/
+inline cv::Rect oriRect(cv::Size oriSize, cv::Size inputSize, float cx, float cy, float w, float h){
+	return scaleRect(rect(cx, cy, w, h), inputSize, oriSize);
+}
+
+/*
+	@srcMat 输入图像
+	@targetSize 目标尺寸
+	@autoShape =true将 dw/dh 向下对齐到 stride的整数倍，保证模型下采样时尺寸整除
+	@scaleFill =true直接拉伸图像到目标尺寸，不保留宽高比
+	@scaleUp =false只缩小不放大
+	@stride 对齐值
+	@color 填充颜色
+*/
+class LetterBox {
+public:
+	LetterBox(cv::Size srcSize, cv::Size targetSize,
+		bool autoShape = false, bool scaleFill = false,
+		bool scaleUp = false, int stride = 32,
+		const cv::Scalar& color = cv::Scalar::all(0));
+
+	void set(cv::Size srcSize, cv::Size targetSize,
+		bool autoShape, bool scaleFill,
+		bool scaleUp, int stride,
+		const cv::Scalar& color);
+
+	cv::Vec4d params() const {
+		return _params;
+	}
+
+	cv::Mat apply(const cv::Mat& srcMat) const;
+	cv::Rect enRect(const cv::Rect& rect) const;
+
+private:
+	cv::Size _srcSize;
+	cv::Size _targetSize;
+	bool _autoShape;
+	bool _scaleFill;
+	bool _scaleUp;
+	int _stride;
+	cv::Scalar _color;
+	cv::Vec4d _params; // [ratio_x, ratio_y, dw, dh]
+};
+
+class SimpleLetterBox : public LetterBox {
+public:
+	SimpleLetterBox(cv::Size srcSize, cv::Size targetSize,
+		const cv::Scalar& color = cv::Scalar::all(0));
+
+	void set(cv::Size srcSize, cv::Size targetSize,
+		const cv::Scalar& color);
+};
+
+/*
+	兼容函数包装器，保留原接口调用方式。
+*/
+cv::Mat letterBox(const cv::Mat& srcMat, cv::Size targetSize,
+	bool autoShape, bool scaleFill, bool scaleUp,
+	int stride = 32, const cv::Scalar& color = cv::Scalar::all(0));
+
+inline cv::Mat simpleLetterBox(const cv::Mat& srcMat, cv::Size targetSize,
+	const cv::Scalar& color = cv::Scalar::all(0)) {
+	SimpleLetterBox box(srcMat.size(), targetSize, color);
+	return box.apply(srcMat);
+}
+
+cv::Rect enSimpleLetterBoxRect(cv::Size srcSize, cv::Size size, cv::Rect rect);
+
+
 /*
 *onnxruntime的模型加载
 *使用CPU推理
@@ -51,7 +140,7 @@ void OnnxLoaderCPU<concurrency>::load(const char* path, const char* cfg)
 
 	Ort::SessionOptions sessionOptions;
 	//设置图形优化级别
-	sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
+	sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_EXTENDED);
 
 
 	uint count= Concurrency(concurrency);
@@ -95,6 +184,7 @@ public:
 };
 
 
+//使用simpleLetterBox调整图片大小
 //使用cv::dnn::blobFromImage归一化获取张量
 class CVBolbNormalizer {
 public:
@@ -103,26 +193,6 @@ public:
 	cv::Mat operator()(cv::Mat srcMat, cv::Size targetSize, float scalefactor, cv::Scalar mean, bool swapRB);
 };
 
-/*
-* @param oriSize 原图片大小
-* @param inputSize 模型输入图片大小
-* @param cx，cy，w，h矩形框中心位置x,中心位置y，宽高，对应输入图片中的矩形框
-*
-* @note 将输入图片中的矩形框转为原始图片中的矩形框
-*/
-cv::Rect oriRect(cv::Size oriSize, cv::Size inputSize, float cx, float cy, float w, float h);
-
-
-//根据中心点坐标和宽高生成矩形框
-inline cv::Rect rect(double cx, double cy, double w, double h) {
-	return cv::Rect(cv::Point(cx - w / 2, cy - h / 2), cv::Size(w, h));
-}
-
-//将矩形框从一个尺寸缩放到另一个尺寸
-cv::Rect scaleRect(const cv::Rect& box, const cv::Size& fromSize, const cv::Size& toSize);
-
-//将矩形框限制在图片范围内
-cv::Rect rectValidate(const cv::Rect& box, const cv::Size& size);
 
 /*	opencv::dnn模块读取onnx模型的模型读取器
 	使用CPU推理

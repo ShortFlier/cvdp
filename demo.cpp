@@ -4,11 +4,19 @@
 
 #include <random>
 
-cv::Scalar randomColor(int seed) {
-    // 使用 classId 作为种子，同类颜色一致
-    std::mt19937 rng(seed * 1000);  // 乘以一个常数让相邻 classId 颜色差异更大
-    std::uniform_int_distribution<int> dist(0, 255);
-    return cv::Scalar(dist(rng), dist(rng), dist(rng));
+cv::Scalar_<uchar> randomColor(int seed) {
+    // // 使用 classId 作为种子，同类颜色一致
+    // std::mt19937 rng(seed * 1000);  // 乘以一个常数让相邻 classId 颜色差异更大
+    // std::uniform_int_distribution<int> dist(0, 255);
+    // return cv::Scalar(cv::saturate_cast<uchar>(dist(rng)), cv::saturate_cast<uchar>(dist(rng)), cv::saturate_cast<uchar>(dist(rng)));
+	cv::Scalar_<uchar> color;
+	switch(seed){
+		case 0: color=cv::Scalar_<uchar>(255, 0, 0); break;
+		case 1: color=cv::Scalar_<uchar>(0, 255, 0); break;
+		case 2: color=cv::Scalar_<uchar>(0, 0, 255); break;
+		default: color=cv::Scalar_<uchar>(255, 255, 0); break;
+	}
+	return color;
 }
 
 /// 绘制检测结果，从begin到end（不包含end），-1表示全部
@@ -28,7 +36,14 @@ cv::Mat drawPred(const cv::Mat& img, const SegmentResArray& resArr, int begin=0,
 			auto roiMask = resArr[i][j].mask;
 
 			//设置掩膜区域像素为 color
-			roi.setTo(color, roiMask);
+			for (int r = 0; r < roi.rows; ++r) {
+				for (int c = 0; c < roi.cols; ++c) {
+					if (roiMask.at<uchar>(r, c)>130) {
+						cv::Vec3b& v = roi.at< cv::Vec3b>(r, c);
+						v = cv::Vec3b(v[0] | color[0], v[1] | color[1], v[2] | color[2]);
+					}
+				}
+			}
 		}
 	}
 
@@ -61,15 +76,15 @@ void testDetector() {
 }
 
 void testSegmenter() {
-	const char* modelPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\output\weights\best.onnx)";
-	const char* imgPath = R"(C:\Users\qiang\Desktop\document\20251026_131759_465_155.jpg)";
+	const char* modelPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\output\weights\best640x640.onnx)";
+	const char* imgPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\train\images\1.jpg)";
 
 	//yolov8OnnxCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
 	yolov8OnnxCPUSegmenter<> segmenter(2);
 	// yolov8CVDNNCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
 	// segmenter._modelLoader.setInputSize(1, 3, 640, 640);
 
-	segmenter.setNormalizeParam(1.0 / 255.0);
+	segmenter.setNormalizeParam(1.0 / 255.0, cv::Scalar(0, 0, 0), true);
 	segmenter.loadModel(modelPath);
 	cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
 	auto resArr = segmenter.run(img);

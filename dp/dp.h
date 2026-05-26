@@ -181,7 +181,7 @@ class _DPBase {
 				_nmsThreshs.push_back(0.4);
 			}
 
-			log_info("DPDetector推理参数classNum: {0}, threshs: {1}, nmsThreshs: {2}",
+			log_info("DP推理参数classNum: {0}, threshs: {1}, nmsThreshs: {2}",
 				 _classNum, fmt::join(_threshs, ", "), fmt::join(_nmsThreshs, ", "));
 		}
 
@@ -191,13 +191,13 @@ class _DPBase {
 			_mean = mean;
 			_swapRB = swapRB;
 
-			log_info("DPDetector归一化参数scalefactor: {0}, mean: [{1}], swapRB: {2}",
+			log_info("DP归一化参数scalefactor: {0}, mean: [{1}], swapRB: {2}",
 				scalefactor, fmt::join(std::vector<double>{mean[0], mean[1], mean[2]}, ", "), swapRB);
 		}
 
 		//加载模型
 		void loadModel(const char* path, const char* cfg=nullptr) {
-			log_info("DPDetector加载模型: {0}", path);
+			log_info("DP加载模型: {0}", path);
 
 			_modelLoader.load(path, cfg);
 			//获取模型输入大小

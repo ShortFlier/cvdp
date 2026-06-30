@@ -13,12 +13,14 @@
 
 ## 新结构说明
 
-本次重构后，项目分为两个子项目：
+项目分为两个子项目：
 
 - `log/` - 日志模块子项目，包含 `log.h` 和 `log.cpp`
-- `dp/` - 推理功能子项目，包含 `dp.h`、`dputility.h`、`dputility.cpp`、`yolov8.h`、`yolov8.cpp`
+- `dp/` - 推理功能子项目，包含 `dp.h`、`dputility.h`、`dputility.cpp`、`yolov8.h`
+- LetterBox图片预处理重构，使用模板类，方便整合预处理层和解析层
 
 `demo.cpp` 保持在项目根目录，作为程序入口文件。
+
 
 ## 目录结构
 
@@ -28,7 +30,6 @@
   - `dputility.h`
   - `dputility.cpp`
   - `yolov8.h`
-  - `yolov8.cpp`
 - `log/` - 日志模块子项目
   - `log.h`
   - `log.cpp`
@@ -50,9 +51,6 @@ cmake --build .
 
 3. 运行演示程序，查看推理效果
 
-## 日志说明
-
-日志模块已拆分为独立子项目 `log/`，方便单独维护和替换。
 
 ## 扩展建议
 

@@ -77,7 +77,8 @@ void testDetector() {
 
 void testSegmenter() {
 	const char* modelPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\output\weights\best640x640.onnx)";
-	const char* imgPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\train\images\1.jpg)";
+	//const char* imgPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\train\images\1.jpg)";
+	const char* imgPath = R"(C:\Users\qiang\Desktop\document\20251026_131759_465_155.jpg)";
 
 	//yolov8OnnxCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
 	yolov8OnnxCPUSegmenter<> segmenter(2);
@@ -97,6 +98,8 @@ void testSegmenter() {
 
 int main()
 {
+	SetConsoleOutputCP(CP_UTF8);
+
 	logInit(Log_Level::info);
 
 	//testDetector();

@@ -10,6 +10,9 @@ if (POLICY CMP0141)
   set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
 endif()
 
+
+add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
+
 #opencv库
 include_directories("D:\\gw\\opencv\\opencv\\build\\include")
 link_directories("D:\\gw\\opencv\\opencv\\build\\x64\\vc16\\lib")
@@ -45,6 +48,7 @@ target_link_libraries(dpdetect PRIVATE
     onnxruntime.lib
     onnxruntime_providers_shared.lib
 )
+
 
 # 拷贝dll到exe文件目录
 add_custom_command(TARGET dpdetect POST_BUILD

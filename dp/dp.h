@@ -186,6 +186,9 @@ class _DPBase {
 		}
 
 		//设置归一化参数
+		//scalefactor：缩放因子，默认为1/255，对图像像素值进行缩放
+		//mean：均值，默认为[0,0,0,0]
+		//swapRB：是否交换R、B通道，默认为false
 		void setNormalizeParam(float scalefactor, const cv::Scalar& mean = cv::Scalar(), bool swapRB = false) {
 			_scalefactor = scalefactor;
 			_mean = mean;

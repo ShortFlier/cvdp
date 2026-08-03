@@ -2,28 +2,18 @@
 
 
 #include <onnxruntime_cxx_api.h>
+#include <windows.h>
 
 
 #include "dp.h"
+#include "letterbox.h"
 
-//concurrency并发数，默认0时使用当前可用线程数的一半
-inline uint Concurrency(int concurrency) {
-	uint threads = std::thread::hardware_concurrency();
-	return concurrency == 0 ? std::max(static_cast<uint>(1), threads / 2) : concurrency;
+// 并发数配置。
+// concurrency <= 0 时，CPU线程数默认取当前可用线程数的一半；负数仅作为GPU优先标记使用。
+inline int Concurrency(int concurrency) {
+	int threads = static_cast<int>(std::thread::hardware_concurrency());
+	return concurrency <= 0 ? std::max(1, threads / 2) : concurrency;
 }
-
-
-
-//根据中心点坐标和宽高生成矩形框
-inline cv::Rect rect(double cx, double cy, double w, double h) {
-	return cv::Rect(cv::Point(cx - w / 2, cy - h / 2), cv::Size(w, h));
-}
-
-//将矩形框从一个尺寸缩放到另一个尺寸
-cv::Rect scaleRect(const cv::Rect& box, const cv::Size& fromSize, const cv::Size& toSize);
-
-//将矩形框限制在图片范围内
-cv::Rect rectValidate(const cv::Rect& box, const cv::Size& size);
 
 
 /*
@@ -35,148 +25,6 @@ cv::Rect rectValidate(const cv::Rect& box, const cv::Size& size);
 */
 inline cv::Rect oriRect(cv::Size oriSize, cv::Size inputSize, float cx, float cy, float w, float h){
 	return scaleRect(rect(cx, cy, w, h), inputSize, oriSize);
-}
-
-/*
-	@srcMat 输入图像
-	@targetSize 目标尺寸
-	@autoShape =true将 dw/dh 向下对齐到 stride 的整数倍，保证模型下采样时尺寸整除
-	@scaleFill =true直接拉伸图像到目标尺寸，不保留宽高比
-	@scaleUp =false只缩小不放大
-	@stride 对齐值
-	@color 填充颜色
-
-	LetterBox 使用非类型模板参数绑定预处理配置，确保预处理与结果解析使用相同的参数。
-*/
-template<bool autoShape = false, bool scaleFill = false, bool scaleUp = false, int stride = 32>
-class LetterBox {
-public:
-	LetterBox(cv::Size srcSize, cv::Size targetSize,
-		const cv::Scalar& color = cv::Scalar::all(0));
-
-	void set(cv::Size srcSize, cv::Size targetSize,
-		const cv::Scalar& color);
-
-	cv::Vec4d params() const {
-		return _params;
-	}
-
-	cv::Mat apply(const cv::Mat& srcMat) const;
-	cv::Rect enRect(const cv::Rect& rect) const;
-
-private:
-	cv::Size _srcSize;
-	cv::Size _targetSize;
-	cv::Scalar _color;
-	cv::Vec4d _params; // [ratio_x, ratio_y, dw, dh]
-};
-
-template<bool autoShape, bool scaleFill, bool scaleUp, int stride>
-inline LetterBox<autoShape, scaleFill, scaleUp, stride>::LetterBox(cv::Size srcSize, cv::Size targetSize,
-	const cv::Scalar& color)
-{
-	set(srcSize, targetSize, color);
-}
-
-template<bool autoShape, bool scaleFill, bool scaleUp, int stride>
-inline void LetterBox<autoShape, scaleFill, scaleUp, stride>::set(cv::Size srcSize, cv::Size targetSize,
-	const cv::Scalar& color)
-{
-	_srcSize = srcSize;
-	_targetSize = targetSize;
-	_color = color;
-
-	float r = std::min((float)_targetSize.height / (float)_srcSize.height,
-		(float)_targetSize.width / (float)_srcSize.width);
-	if (!scaleUp) {
-		r = std::min(r, 1.0f);
-	}
-
-	float ratio[2] = { r, r };
-	int new_un_pad[2] = {
-		static_cast<int>(std::round((float)_srcSize.width * r)),
-		static_cast<int>(std::round((float)_srcSize.height * r))
-	};
-
-	auto dw = static_cast<float>(_targetSize.width - new_un_pad[0]);
-	auto dh = static_cast<float>(_targetSize.height - new_un_pad[1]);
-
-	if (autoShape) {
-		dw = static_cast<float>(static_cast<int>(dw) % stride);
-		dh = static_cast<float>(static_cast<int>(dh) % stride);
-	}
-	else if (scaleFill) {
-		dw = 0.0f;
-		dh = 0.0f;
-		new_un_pad[0] = _targetSize.width;
-		new_un_pad[1] = _targetSize.height;
-		ratio[0] = static_cast<float>(_targetSize.width) / (float)_srcSize.width;
-		ratio[1] = static_cast<float>(_targetSize.height) / (float)_srcSize.height;
-	}
-
-	dw /= 2.0f;
-	dh /= 2.0f;
-
-	int top = static_cast<int>(std::round(dh - 0.1f));
-	int left = static_cast<int>(std::round(dw - 0.1f));
-
-	_params = cv::Vec4d(ratio[0], ratio[1], left, top);
-}
-
-template<bool autoShape, bool scaleFill, bool scaleUp, int stride>
-inline cv::Mat LetterBox<autoShape, scaleFill, scaleUp, stride>::apply(const cv::Mat& srcMat) const
-{
-	if (scaleFill) {
-		cv::Mat dst;
-		cv::resize(srcMat, dst, _targetSize, 0, 0, cv::INTER_LINEAR);
-		return dst;
-	}
-
-	float scale = std::min((float)_targetSize.height / (float)_srcSize.height,
-		(float)_targetSize.width / (float)_srcSize.width);
-	if (!scaleUp) {
-		scale = std::min(scale, 1.0f);
-	}
-
-	int newW = static_cast<int>(std::round(_srcSize.width * scale));
-	int newH = static_cast<int>(std::round(_srcSize.height * scale));
-
-	int padW = _targetSize.width - newW;
-	int padH = _targetSize.height - newH;
-
-	if (autoShape) {
-		padW = padW / stride * stride;
-		padH = padH / stride * stride;
-	}
-
-	int padLeft = padW / 2;
-	int padTop = padH / 2;
-
-	cv::Mat resized;
-	if (_srcSize.width != newW || _srcSize.height != newH) {
-		cv::resize(srcMat, resized, cv::Size(newW, newH), 0, 0, cv::INTER_LINEAR);
-	}
-	else {
-		resized = srcMat.clone();
-	}
-
-	cv::Mat dst(_targetSize.height, _targetSize.width, srcMat.type(), _color);
-	cv::Rect roi(padLeft, padTop, newW, newH);
-	resized.copyTo(dst(roi));
-
-	return dst;
-}
-
-template<bool autoShape, bool scaleFill, bool scaleUp, int stride>
-inline cv::Rect LetterBox<autoShape, scaleFill, scaleUp, stride>::enRect(const cv::Rect& rect) const
-{
-	int x = static_cast<int>(std::round((rect.x - _params[2]) / _params[0]));
-	int y = static_cast<int>(std::round((rect.y - _params[3]) / _params[1]));
-	int width = static_cast<int>(std::round(rect.width / _params[0]));
-	int height = static_cast<int>(std::round(rect.height / _params[1]));
-
-	cv::Rect oriRect(x, y, width, height);
-	return rectValidate(oriRect, _srcSize);
 }
 
 /*
@@ -195,20 +43,50 @@ public:
 	}
 };
 
+namespace detail {
+	typedef OrtStatus*(ORT_API_CALL* AppendCudaProviderFn)(OrtSessionOptions*, int);
+
+	inline bool TryAppendCudaExecutionProvider(Ort::SessionOptions& sessionOptions, int deviceId, std::string& errorMessage) {
+		HMODULE onnxRuntimeModule = GetModuleHandleW(L"onnxruntime.dll");
+		if (onnxRuntimeModule == nullptr) {
+			errorMessage = "未找到onnxruntime.dll";
+			return false;
+		}
+
+		auto appendCuda = reinterpret_cast<AppendCudaProviderFn>(GetProcAddress(onnxRuntimeModule, "OrtSessionOptionsAppendExecutionProvider_CUDA"));
+		if (appendCuda == nullptr) {
+			errorMessage = "当前onnxruntime.dll未导出CUDA执行提供器接口";
+			return false;
+		}
+
+		OrtStatus* status = appendCuda(sessionOptions, deviceId);
+		if (status != nullptr) {
+			auto api = Ort::GetApi();
+			errorMessage = api.GetErrorMessage(status);
+			api.ReleaseStatus(status);
+			return false;
+		}
+
+		return true;
+	}
+}
+
 /*
-*onnxruntime的模型加载
-*使用CPU推理
-*concurrency并发数，默认0时使用当前可用线程数的一半
+* onnxruntime的模型加载
+* concurrency < 0 时优先尝试GPU推理，失败后自动回退CPU推理
+* concurrency = 0 时使用当前可用线程数的一半
+* concurrency > 0 时使用指定CPU并发数
 */
-template <uint concurrency= 0>
-class OnnxLoaderCPU {
+template <int concurrency = 0>
+class OnnxLoader {
 
 private:
-	Ort::Session session;
+	// Env must outlive Session, so declare Env before Session.
 	Ort::Env env;
+	Ort::Session session;
 
 public:
-	OnnxLoaderCPU();
+	OnnxLoader();
 
 	//加载模型
 	void load(const char* path, const char* cfg = nullptr);
@@ -221,14 +99,16 @@ public:
 	//返回输入、输出张量大小
 	void getSize(cv::Vec4i& inputSize, std::vector<std::vector<int>>& outputSizes);
 };
-template <uint concurrency>
-OnnxLoaderCPU<concurrency>::OnnxLoaderCPU():session(nullptr),env(nullptr)
+template <int concurrency>
+OnnxLoader<concurrency>::OnnxLoader():env(nullptr),session(nullptr)
 {
 }
 
-template <uint concurrency>
-void OnnxLoaderCPU<concurrency>::load(const char* path, const char* cfg)
+template <int concurrency>
+void OnnxLoader<concurrency>::load(const char* path, const char* cfg)
 {
+	(void)cfg;
+
 	//Ort环境
 	env=Ort::Env(ORT_LOGGING_LEVEL_WARNING, "yolo");
 
@@ -236,20 +116,39 @@ void OnnxLoaderCPU<concurrency>::load(const char* path, const char* cfg)
 	//设置图形优化级别
 	sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_EXTENDED);
 
-
-	uint count= Concurrency(concurrency);
-
-	log_info("Onnx推理并发数: {0}", count);
-
-	sessionOptions.SetIntraOpNumThreads(count);
-
 	std::string str(path);
 	std::wstring wstr(str.begin(), str.end());
+
+	if (concurrency < 0) {
+		log_info("Onnx推理模式: GPU优先, 请求参数: {0}", concurrency);
+
+		std::string gpuError;
+		if (detail::TryAppendCudaExecutionProvider(sessionOptions, 0, gpuError)) {
+			log_info("Onnx推理模式: 已启用CUDA执行提供器, device_id: {0}", 0);
+			try {
+				session = Ort::Session(env, wstr.c_str(), sessionOptions);
+				return;
+			}
+			catch (const std::exception& e) {
+				gpuError = e.what();
+				log_warn("Onnx GPU会话创建失败，准备回退CPU推理: {0}", gpuError);
+			}
+		}
+		else {
+			log_warn("Onnx GPU执行器初始化失败，准备回退CPU推理: {0}", gpuError);
+		}
+	}
+
+	int count = Concurrency(concurrency);
+	log_info("Onnx推理模式: CPU");
+	log_info("Onnx推理并发数: {0}", count);
+	sessionOptions.SetIntraOpNumThreads(count);
+
 	session = Ort::Session(env, wstr.c_str(), sessionOptions);
 }
 
-template <uint concurrency>
-void OnnxLoaderCPU<concurrency>::getSize(cv::Vec4i& inputSize, std::vector<std::vector<int>>& outputSizes)
+template <int concurrency>
+void OnnxLoader<concurrency>::getSize(cv::Vec4i& inputSize, std::vector<std::vector<int>>& outputSizes)
 {
 	//输入大小获取
 	auto inputShape=session.GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();

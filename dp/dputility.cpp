@@ -78,8 +78,9 @@ std::vector<cv::Mat> SingleInputOnnxRunner::operator()(Ort::Session& session, cv
 
 	std::vector<cv::Mat> res;
 	for(int i=0; i<outputCount; ++i) {
-		cv::Mat mat(outputSizes[i].size(), outputSizes[i].data(), CV_32F, outputData.at(i).GetTensorMutableData<float>());	
-		res.push_back(mat);
+		cv::Mat mat(outputSizes[i].size(), outputSizes[i].data(), CV_32F, outputData.at(i).GetTensorMutableData<float>());
+		// Copy out tensor data, because outputData will be released when this function returns.
+		res.push_back(mat.clone());
 	}
 
 	return res;

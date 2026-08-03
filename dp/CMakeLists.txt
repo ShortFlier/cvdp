@@ -3,6 +3,7 @@ add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 
 add_library(dp STATIC
     dp.h
+    letterbox.h
     dputility.h
     dputility.cpp
     yolov8.h

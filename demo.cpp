@@ -35,6 +35,7 @@ cv::Mat drawPred(const cv::Mat& img, const SegmentResArray& resArr, int begin=0,
 
 			auto roiMask = resArr[i][j].mask;
 
+			cv::rectangle(resImg, box, color, 2);
 			//设置掩膜区域像素为 color
 			for (int r = 0; r < roi.rows; ++r) {
 				for (int c = 0; c < roi.cols; ++c) {
@@ -55,8 +56,8 @@ void testDetector() {
 	const char* modelPath = R"(C:\Users\qiang\runs\detect\runs\yolov8s_singleclass_onebox_bbox_3g7\weights\best.onnx)";
 	const char* imgPath = R"(C:\Users\qiang\Desktop\document\20251026_131759_465_155.jpg)";
 
-	yolov8OnnxCPUDetector<> detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
-	// yolov8CVDNNCPUDetector<> detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
+	yolov8OnnxDetector<> detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
+	// yolov8CVDNNDetector<> detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
 	// detector._modelLoader.setInputSize(1, 3, 512, 512);
 
 	detector.setNormalizeParam(1.0 / 255.0);
@@ -78,16 +79,73 @@ void testDetector() {
 void testSegmenter() {
 	const char* modelPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\output\weights\best640x640.onnx)";
 	//const char* imgPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\train\images\1.jpg)";
-	const char* imgPath = R"(C:\Users\qiang\Desktop\document\20251026_131759_465_155.jpg)";
+	const char* imgPath = R"(C:\Users\qiang\Desktop\test\test.jpg)";
 
 	//yolov8OnnxCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
-	yolov8OnnxCPUSegmenter<> segmenter(2);
+	yolov8OnnxSegmenter<> segmenter(2);
 	// yolov8CVDNNCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
 	// segmenter._modelLoader.setInputSize(1, 3, 640, 640);
 
 	segmenter.setNormalizeParam(1.0 / 255.0, cv::Scalar(0, 0, 0), true);
 	segmenter.loadModel(modelPath);
 	cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
+	auto resArr = segmenter.run(img);
+
+	cv::Mat resImg = drawPred(img, resArr);
+
+	cv::namedWindow("res", cv::WINDOW_NORMAL);
+	cv::imshow("res", resImg);
+}
+
+void testOnnxLoaderGpuFallbackDetect() {
+	
+	const char* modelPath = R"(C:\Users\qiang\runs\detect\runs\yolov8s_singleclass_onebox_bbox_3g7\weights\best.onnx)";
+	const char* imgPath = R"(C:\Users\qiang\Desktop\document\20251026_131759_465_155.jpg)";
+
+	yolov8OnnxDetector<-1> detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
+	detector.setNormalizeParam(1.0 / 255.0);
+	detector.loadModel(modelPath);
+	for(int i=0; i<4; ++i){
+
+
+		cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
+		auto resArr = detector.run(img);
+
+		if(i<3){//运行3次预热
+			continue;
+		}
+
+		auto res = resArr.at(0);
+
+		for (int i = 0; i < res.size(); ++i) {
+			cv::rectangle(img, res[i].box, cv::Scalar(0, 255, 0), 6);
+		}
+
+		cv::namedWindow("onnx_loader_test", cv::WINDOW_NORMAL);
+		cv::imshow("onnx_loader_test", img);
+	}
+}
+
+void testOnnxLoaderGpuFallbackSegment() {
+	
+	const char* modelPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\output\weights\best640x640.onnx)";
+	//const char* imgPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\train\images\1.jpg)";
+	const char* imgPath = R"(C:\Users\qiang\Desktop\20260606_160050_629_001.jpg)";
+
+	//yolov8OnnxCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
+	yolov8OnnxSegmenter<-1> segmenter(2);
+	// yolov8CVDNNCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
+	// segmenter._modelLoader.setInputSize(1, 3, 640, 640);
+
+
+	segmenter.setNormalizeParam(1.0 / 255.0, cv::Scalar(0, 0, 0), true);
+	segmenter.loadModel(modelPath);
+	cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
+
+	
+	//预热一次
+	segmenter.run(img);
+
 	auto resArr = segmenter.run(img);
 
 	cv::Mat resImg = drawPred(img, resArr);
@@ -104,6 +162,8 @@ int main()
 
 	//testDetector();
 	testSegmenter();
+	//testOnnxLoaderGpuFallbackDetect();
+	//testOnnxLoaderGpuFallbackSegment();
 
 	cv::waitKey();
 

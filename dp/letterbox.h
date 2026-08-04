@@ -1,17 +1,6 @@
 ﻿#pragma once
 
-#include "dp.h"
-
-// 根据中心点坐标和宽高生成矩形框
-inline cv::Rect rect(double cx, double cy, double w, double h) {
-	return cv::Rect(cv::Point(cx - w / 2, cy - h / 2), cv::Size(w, h));
-}
-
-// 将矩形框从一个尺寸缩放到另一个尺寸
-cv::Rect scaleRect(const cv::Rect& box, const cv::Size& fromSize, const cv::Size& toSize);
-
-// 将矩形框限制在图片范围内
-cv::Rect rectValidate(const cv::Rect& box, const cv::Size& size);
+#include "dputility.h"
 
 /*
 	@srcMat 输入图像
@@ -173,3 +162,40 @@ inline cv::Rect LetterBox<autoShape, scaleFill, scaleUp, stride>::enRect(const c
 	cv::Rect oriRect(x, y, width, height);
 	return rectValidate(oriRect, _srcSize);
 }
+
+
+
+
+
+
+
+
+
+/*
+	LetterBox预处理器
+	处理后返回指定大小，并且归一化到[0,1]的浮点图像。
+*/
+template<typename LetterBoxT>
+class LetterBoxNormalizer {
+public:
+	LetterBoxNormalizer() = default;
+
+	float _scalefactor = 1.0/255.0;
+	cv::Scalar _fillColor = cv::Scalar(114, 114, 114);
+	bool _swapRB = true;
+
+	cv::Mat operator()(cv::Mat srcMat, cv::Size targetSize) {
+		//使用LetterBox缩放指定尺寸
+		LetterBoxT box(srcMat.size(), targetSize, _fillColor);
+		cv::Mat mat = box.apply(srcMat);
+
+
+		//归一化
+		cv::Mat blob=cv::dnn::blobFromImage(mat, _scalefactor, cv::Size(), cv::Scalar(), _swapRB, false);
+
+		return blob;
+	}
+
+
+};
+

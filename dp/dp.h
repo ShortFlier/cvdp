@@ -1,7 +1,5 @@
 ﻿#pragma once
 
-#include <iostream>
-
 #include <opencv2/opencv.hpp>
 
 #include "log.h"
@@ -75,7 +73,7 @@ public:
 */
 class NormalizerBase{
 public:
-	virtual cv::Mat operator()(const cv::Mat& src, const cv::Size& targetSize, float scalefactor, const cv::Scalar& mean, bool swapRB) = 0;
+	virtual cv::Mat operator()(const cv::Mat& src, const cv::Size& targetSize) = 0;
 
 	virtual ~NormalizerBase(){};
 };
@@ -153,49 +151,42 @@ class _DPBase {
 		//NMS阈值
 		std::vector<float> _nmsThreshs;
 
-		//归一化参数
-		//减去均值
-		cv::Scalar _mean = cv::Scalar();
-		//缩放因子
-		float _scalefactor = 1.0 / 255;
-		//交换R、B通道
-		bool _swapRB = false;
-
 		
-
 
 	public:
 
 		//传入的分数阈值或NMS阈值为空，分别设置为默认的0.5、0.4
 		//传入的分数阈值或NMS阈值数量不足classNum，使用默认值补全
 		_DPBase(int classNum, const std::vector<float>& threshs = std::vector<float>(),
-			const std::vector<float>& nmsThreshs = std::vector<float>())
-			:_classNum(classNum), _threshs(std::move(threshs)), _nmsThreshs(std::move(nmsThreshs)) {
-			int needThresh = _classNum - static_cast<int>(_threshs.size());
-			for (int i = 0; i < needThresh; ++i) {
-				_threshs.push_back(0.5);
-			}
-
-			int needNms = _classNum - static_cast<int>(_nmsThreshs.size());
-			for (int i = 0; i < needNms; ++i) {
-				_nmsThreshs.push_back(0.4);
-			}
+			const std::vector<float>& nmsThreshs = std::vector<float>()){
+				setClassNum(classNum);
+				setScoreThreshs(threshs);
+				setNmsThreshs(nmsThreshs);
 
 			log_info("DP推理参数classNum: {0}, threshs: {1}, nmsThreshs: {2}",
 				 _classNum, fmt::join(_threshs, ", "), fmt::join(_nmsThreshs, ", "));
 		}
 
-		//设置归一化参数
-		//scalefactor：缩放因子，默认为1/255，对图像像素值进行缩放
-		//mean：均值，默认为[0,0,0,0]
-		//swapRB：是否交换R、B通道，默认为false
-		void setNormalizeParam(float scalefactor, const cv::Scalar& mean = cv::Scalar(), bool swapRB = false) {
-			_scalefactor = scalefactor;
-			_mean = mean;
-			_swapRB = swapRB;
+		void setClassNum(int classNum) {
+			_classNum = classNum;
+		}
 
-			log_info("DP归一化参数scalefactor: {0}, mean: [{1}], swapRB: {2}",
-				scalefactor, fmt::join(std::vector<double>{mean[0], mean[1], mean[2]}, ", "), swapRB);
+		void setScoreThreshs(const std::vector<float>& threshs) {
+			_threshs.clear();
+			_threshs = threshs;
+			int needThresh = _classNum - static_cast<int>(_threshs.size());
+			for (int i = 0; i < needThresh; ++i) {
+				_threshs.push_back(0.5);
+			}
+		}
+
+		void setNmsThreshs(const std::vector<float>& nmsThreshs) {
+			_nmsThreshs.clear();
+			_nmsThreshs = nmsThreshs;
+			int needNms = _classNum - static_cast<int>(_nmsThreshs.size());
+			for (int i = 0; i < needNms; ++i) {
+				_nmsThreshs.push_back(0.4);
+			}
 		}
 
 		//加载模型
@@ -225,7 +216,7 @@ class _DPBase {
 			//归一化
 			log_info("执行归一化");
 			cv::Size targetSize(_inputSize[3], _inputSize[2]);
-			cv::Mat bold = _normalizer(srcMat, targetSize, _scalefactor, _mean, _swapRB);
+			cv::Mat bold = _normalizer(srcMat, targetSize);
 
 			//运行
 			log_info("执行模型推理");
@@ -238,11 +229,6 @@ class _DPBase {
 
 
 			return res;
-		}
-
-		_Result run(const char* imgPath) {
-			cv::Mat mat = cv::imread(imgPath, cv::IMREAD_UNCHANGED);
-			return run(mat);
 		}
 };
 

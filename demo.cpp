@@ -60,8 +60,6 @@ void testDetector() {
 	// yolov8CVDNNDetector<> detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
 	// detector._modelLoader.setInputSize(1, 3, 512, 512);
 
-	detector.setNormalizeParam(1.0 / 255.0);
-
 	detector.loadModel(modelPath);
 	
 	cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
@@ -79,14 +77,13 @@ void testDetector() {
 void testSegmenter() {
 	const char* modelPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\output\weights\best640x640.onnx)";
 	//const char* imgPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\train\images\1.jpg)";
-	const char* imgPath = R"(C:\Users\qiang\Desktop\test\test.jpg)";
+	const char* imgPath = R"(C:\Users\qiang\Desktop\test\20251026_142007_456_542.jpg)";
 
 	//yolov8OnnxCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
 	yolov8OnnxSegmenter<> segmenter(2);
 	// yolov8CVDNNCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
 	// segmenter._modelLoader.setInputSize(1, 3, 640, 640);
 
-	segmenter.setNormalizeParam(1.0 / 255.0, cv::Scalar(0, 0, 0), true);
 	segmenter.loadModel(modelPath);
 	cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
 	auto resArr = segmenter.run(img);
@@ -103,7 +100,6 @@ void testOnnxLoaderGpuFallbackDetect() {
 	const char* imgPath = R"(C:\Users\qiang\Desktop\document\20251026_131759_465_155.jpg)";
 
 	yolov8OnnxDetector<-1> detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
-	detector.setNormalizeParam(1.0 / 255.0);
 	detector.loadModel(modelPath);
 	for(int i=0; i<4; ++i){
 
@@ -130,7 +126,7 @@ void testOnnxLoaderGpuFallbackSegment() {
 	
 	const char* modelPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\output\weights\best640x640.onnx)";
 	//const char* imgPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\train\images\1.jpg)";
-	const char* imgPath = R"(C:\Users\qiang\Desktop\20260606_160050_629_001.jpg)";
+	const char* imgPath = R"(C:\Users\qiang\Desktop\test\20251026_142007_456_542.jpg)";
 
 	//yolov8OnnxCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
 	yolov8OnnxSegmenter<-1> segmenter(2);
@@ -138,7 +134,6 @@ void testOnnxLoaderGpuFallbackSegment() {
 	// segmenter._modelLoader.setInputSize(1, 3, 640, 640);
 
 
-	segmenter.setNormalizeParam(1.0 / 255.0, cv::Scalar(0, 0, 0), true);
 	segmenter.loadModel(modelPath);
 	cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
 

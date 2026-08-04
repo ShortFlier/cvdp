@@ -3,9 +3,10 @@
 #include "dp.h"
 
 #include "letterbox.h"
-#include "dputility.h"
 
+#include "onnx.h"
 
+#include "cvdnn.h"
 
 
 
@@ -220,7 +221,7 @@ template<bool autoShape = false, bool scaleFill = false, bool scaleUp = false, i
 class LetterBoxConfig {
 public:
 	using Box = LetterBox<autoShape, scaleFill, scaleUp, stride>;
-	using Normalizer = CVBolbLetterBoxNormalizer<Box>;
+	using Normalizer = LetterBoxNormalizer<Box>;
 	using DetectParser = Yolov8DetectLetterBoxResultParser<Box>;
 	using SegmentParser = Yolov8SegmentLetterBoxResultParser<Box>;
 };

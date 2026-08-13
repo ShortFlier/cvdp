@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "dputility.h"
 #include <opencv2/dnn.hpp>
@@ -11,32 +11,37 @@
 */
 typedef cv::dnn::Net DnnNet;
 
-template <uint concurrency= 0>
-class CVDnnLoaderCPU: public ModelLoaderBase<DnnNet> {
+
+class CVDnnLoaderCPU: public ModelLoaderBase<CVDnnLoaderCPU, DnnNet> {
 public:
 	CVDnnLoaderCPU(){
 		_inputSize=nullptr;
+		_concurrency=0;
 	}
 	~CVDnnLoaderCPU(){
 		delete _inputSize;
 	}
 
+	using _Model=DnnNet;
+
 	//加载模型
-	void load(const char* path, const char* cfg = nullptr) override{
+	void loadImpl(const char* path, const char* cfg = nullptr){
 		net = cv::dnn::readNetFromONNX(path);
 
-		uint count= Concurrency(concurrency);
+		if(_concurrency<=0){
+			_concurrency=getCPUConcurrency();
+		}
 
 		// 设置计算后端和线程数
         net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
         net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
-		cv::setNumThreads(count);
+		cv::setNumThreads(_concurrency);
 
-		log_info("opencv::dnn::net推理并发数: {0}", count);
+		log_info("opencv::dnn::net推理并发数: {0}", _concurrency);
 	}
 
 	//返回模型
-	DnnNet& get() override{
+	_Model& getImpl(){
 		return net;
 	}
 
@@ -46,7 +51,7 @@ public:
 	}
 
 	//返回输入、输出张量大小
-	void getSize(cv::Vec4i& inputSize, std::vector<std::vector<int>>& outputSizes) override{
+	void getSizeImpl(cv::Vec4i& inputSize, std::vector<std::vector<int>>& outputSizes){
 		//输入大小获取
 		if(_inputSize==nullptr){
 			const char* err="opencv::dnn::net无法直接获取输出大小，请先调用setInputSize设置输入大小!";
@@ -72,18 +77,20 @@ public:
 	}
 
 private:
-	DnnNet net;
+	_Model net;
 
 	cv::Vec4i* _inputSize;
+
+	unsigned int _concurrency;	
 };
 
 
 
-class CVDNNRunner: public RunnerBase<DnnNet> {
+class CVDNNRunner: public RunnerBase<CVDNNRunner, DnnNet> {
 public:
 	CVDNNRunner() {}
 
-	std::vector<cv::Mat> operator()( DnnNet& net,  cv::Mat& blob) override{
+	std::vector<cv::Mat> run(DnnNet& net,  cv::Mat& blob){
 	// 设置输入数据
 	net.setInput(blob);
 

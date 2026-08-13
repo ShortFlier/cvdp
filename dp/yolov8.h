@@ -229,14 +229,10 @@ public:
 using SimpleLetterBoxConfig = LetterBoxConfig<false, false, false, 32>;
 
 
-template<int concurrency= 0>
-using yolov8OnnxDetector = DPDetector< OnnxLoader<concurrency>, typename SimpleLetterBoxConfig::Normalizer, SingleInputOnnxRunner, typename SimpleLetterBoxConfig::DetectParser>;
+using yolov8OnnxDetector = DPDetector< OnnxLoader, typename SimpleLetterBoxConfig::Normalizer, SingleInputOnnxRunner, typename SimpleLetterBoxConfig::DetectParser>;
 
-template<int concurrency= 0>
-using yolov8OnnxSegmenter = DPSegmentor< OnnxLoader<concurrency>, typename SimpleLetterBoxConfig::Normalizer, SingleInputOnnxRunner, typename SimpleLetterBoxConfig::SegmentParser>;
+using yolov8OnnxSegmenter = DPSegmentor< OnnxLoader, typename SimpleLetterBoxConfig::Normalizer, SingleInputOnnxRunner, typename SimpleLetterBoxConfig::SegmentParser>;
 
-template<int concurrency= 0>
-using yolov8CVDNNDetector= DPDetector< CVDnnLoaderCPU<concurrency>, typename SimpleLetterBoxConfig::Normalizer, CVDNNRunner, typename SimpleLetterBoxConfig::DetectParser>;
+using yolov8CVDNNCPUDetector= DPDetector< CVDnnLoaderCPU, typename SimpleLetterBoxConfig::Normalizer, CVDNNRunner, typename SimpleLetterBoxConfig::DetectParser>;
 
-template<int concurrency= 0>
-using yolov8CVDNNSegmenter= DPSegmentor< CVDnnLoaderCPU<concurrency>, typename SimpleLetterBoxConfig::Normalizer, CVDNNRunner, typename SimpleLetterBoxConfig::SegmentParser>;
+using yolov8CVDNNSCPUegmenter= DPSegmentor< CVDnnLoaderCPU, typename SimpleLetterBoxConfig::Normalizer, CVDNNRunner, typename SimpleLetterBoxConfig::SegmentParser>;

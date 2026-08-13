@@ -180,7 +180,7 @@ class LetterBoxNormalizer {
 public:
 	LetterBoxNormalizer() = default;
 
-	float _scalefactor = 1.0/255.0;
+	float _scalefactor = 1.0f/255.0f;
 	cv::Scalar _fillColor = cv::Scalar(114, 114, 114);
 	bool _swapRB = true;
 

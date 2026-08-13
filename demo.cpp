@@ -1,4 +1,4 @@
-#include "yolov8.h"
+﻿#include "yolov8.h"
 
 #include "log.h"
 
@@ -56,7 +56,9 @@ void testDetector() {
 	const char* modelPath = R"(C:\Users\qiang\runs\detect\runs\yolov8s_singleclass_onebox_bbox_3g7\weights\best.onnx)";
 	const char* imgPath = R"(C:\Users\qiang\Desktop\document\20251026_131759_465_155.jpg)";
 
-	yolov8OnnxDetector<> detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
+	yolov8OnnxDetector detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
+	//设置为使用CPU推理
+	detector._modelLoader.setUsingGPU(false);
 	// yolov8CVDNNDetector<> detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
 	// detector._modelLoader.setInputSize(1, 3, 512, 512);
 
@@ -80,7 +82,9 @@ void testSegmenter() {
 	const char* imgPath = R"(C:\Users\qiang\Desktop\test\20251026_142007_456_542.jpg)";
 
 	//yolov8OnnxCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
-	yolov8OnnxSegmenter<> segmenter(2);
+	yolov8OnnxSegmenter segmenter(2);
+	//设置为使用CPU推理
+	segmenter._modelLoader.setUsingGPU(false);
 	// yolov8CVDNNCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
 	// segmenter._modelLoader.setInputSize(1, 3, 640, 640);
 
@@ -99,7 +103,7 @@ void testOnnxLoaderGpuFallbackDetect() {
 	const char* modelPath = R"(C:\Users\qiang\runs\detect\runs\yolov8s_singleclass_onebox_bbox_3g7\weights\best.onnx)";
 	const char* imgPath = R"(C:\Users\qiang\Desktop\document\20251026_131759_465_155.jpg)";
 
-	yolov8OnnxDetector<-1> detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
+	yolov8OnnxDetector detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
 	detector.loadModel(modelPath);
 	for(int i=0; i<4; ++i){
 
@@ -129,7 +133,7 @@ void testOnnxLoaderGpuFallbackSegment() {
 	const char* imgPath = R"(C:\Users\qiang\Desktop\test\20251026_142007_456_542.jpg)";
 
 	//yolov8OnnxCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
-	yolov8OnnxSegmenter<-1> segmenter(2);
+	yolov8OnnxSegmenter segmenter(2);
 	// yolov8CVDNNCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
 	// segmenter._modelLoader.setInputSize(1, 3, 640, 640);
 
@@ -156,9 +160,9 @@ int main()
 	logInit(Log_Level::info);
 
 	//testDetector();
-	testSegmenter();
+	//testSegmenter();
 	//testOnnxLoaderGpuFallbackDetect();
-	//testOnnxLoaderGpuFallbackSegment();
+	testOnnxLoaderGpuFallbackSegment();
 
 	cv::waitKey();
 

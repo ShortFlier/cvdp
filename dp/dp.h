@@ -56,14 +56,18 @@ typedef std::vector<std::vector<SegmentRes>> SegmentResArray;
 		get，返回可用模型
 		getSize， 返回模型输入输出尺寸
 */
-template<typename _Model>
+template<typename _ModelLoader, typename _Model>
 class ModelLoaderBase{
 public:
-	virtual void load(const char* path, const char* cfg = nullptr) = 0;
-	virtual _Model& get() = 0;
-	virtual void getSize(cv::Vec4i& inputSize, std::vector<std::vector<int>>& outputSize) = 0;
-
-	virtual ~ModelLoaderBase(){};
+	void load(const char* path, const char* cfg = nullptr){
+		static_cast<_ModelLoader*>(this)->loadImpl(path, cfg);
+	}
+	_Model& get(){
+		return static_cast<_ModelLoader*>(this)->getImpl();
+	}
+	void getSize(cv::Vec4i& inputSize, std::vector<std::vector<int>>& outputSize){
+		static_cast<_ModelLoader*>(this)->getSizeImpl(inputSize, outputSize);
+	}
 };
 
 
@@ -71,11 +75,12 @@ public:
 	图像归一化器
 	  函数符operator()，归一化图像，转为张量
 */
+template<typename _Normalizer>
 class NormalizerBase{
 public:
-	virtual cv::Mat operator()(const cv::Mat& src, const cv::Size& targetSize) = 0;
-
-	virtual ~NormalizerBase(){};
+	cv::Mat operator()(const cv::Mat& src, const cv::Size& targetSize){
+		return static_cast<_Normalizer*>(this)->normalize(src, targetSize);
+	}
 };
 
 
@@ -83,12 +88,13 @@ public:
 	模型运行器
 		函数符operator()，使用模型进行推理，返回结果张量
 */
-template<typename _model>
+template<typename _Runner, typename _Model>
 class RunnerBase{
 public:
-	virtual std::vector<cv::Mat> operator()( _model& model,  cv::Mat& input) = 0;
+	std::vector<cv::Mat> operator()(_Model& model,  cv::Mat& input){
+		return static_cast<_Runner*>(this)->run(model, input);
+	}
 
-	virtual ~RunnerBase(){};
 };
 
 
@@ -96,14 +102,15 @@ public:
 	结果解析器
 		函数符operator()，解析模型输出的结果张量，返回结果数组
 */
-template<typename _Result>
+template<typename _Parser>
 class ParserBase{
 public:
-	virtual _Result operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, cv::Size inputSize,
+	virtual typename _Parser::_Result operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, cv::Size inputSize,
 								const std::vector<std::vector<int>>& outputSizes, int classNum,
-								const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs) = 0;
+								const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs){
+		return static_cast<_Parser*>(this)->parse(outputs, oriSize, inputSize, outputSizes, classNum, socreThreshs, nmsThreshs);
+	}
 
-	virtual ~ParserBase(){};
 };
 
 /*
@@ -185,7 +192,7 @@ class _DPBase {
 			_nmsThreshs = nmsThreshs;
 			int needNms = _classNum - static_cast<int>(_nmsThreshs.size());
 			for (int i = 0; i < needNms; ++i) {
-				_nmsThreshs.push_back(0.4);
+				_nmsThreshs.push_back(0.4f);
 			}
 		}
 

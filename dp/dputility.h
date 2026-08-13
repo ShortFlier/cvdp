@@ -3,11 +3,9 @@
 #include <opencv2/opencv.hpp>
 #include <thread>
 
-// 并发数配置。
-// concurrency <= 0 时，CPU线程数默认取当前可用线程数的一半；负数仅作为GPU优先标记使用。
-inline int Concurrency(int concurrency) {
-	int threads = static_cast<int>(std::thread::hardware_concurrency());
-	return concurrency <= 0 ? std::max(1, threads / 2) : concurrency;
+// 获取当前CPU线程数的一半
+inline int getCPUConcurrency() {
+	return static_cast<int>(std::thread::hardware_concurrency())/2;
 }
 
 

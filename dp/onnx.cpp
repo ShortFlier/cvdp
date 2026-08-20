@@ -4,85 +4,103 @@
 
 
 namespace detail {
-	typedef OrtStatus*(ORT_API_CALL* AppendCudaProviderFn)(OrtSessionOptions*, int);
 
-	inline bool TryAppendCudaExecutionProvider(Ort::SessionOptions& sessionOptions, int deviceId, std::string& errorMessage) {
-		HMODULE onnxRuntimeModule = GetModuleHandleW(L"onnxruntime.dll");
-		if (onnxRuntimeModule == nullptr) {
-			errorMessage = "未找到onnxruntime.dll";
+	bool TryAppendCudaExecutionProvider(Ort::SessionOptions& sessionOptions, int deviceId) {
+		auto api = Ort::GetApi();
+		if (api.SessionOptionsAppendExecutionProvider_CUDA == nullptr) {
+			log_error("当前onnxruntime不支持CUDA执行提供器接口");
 			return false;
 		}
 
-		auto appendCuda = reinterpret_cast<AppendCudaProviderFn>(GetProcAddress(onnxRuntimeModule, "OrtSessionOptionsAppendExecutionProvider_CUDA"));
-		if (appendCuda == nullptr) {
-			errorMessage = "当前onnxruntime.dll未导出CUDA执行提供器接口";
-			return false;
-		}
+		OrtCUDAProviderOptions cuda_options;
+		cuda_options.device_id = deviceId;
 
-		OrtStatus* status = appendCuda(sessionOptions, deviceId);
+		OrtStatus* status = api.SessionOptionsAppendExecutionProvider_CUDA(sessionOptions, &cuda_options);
 		if (status != nullptr) {
 			auto api = Ort::GetApi();
-			errorMessage = api.GetErrorMessage(status);
+			log_error("onnx设置CUDA失败：{0}", api.GetErrorMessage(status));
 			api.ReleaseStatus(status);
 			return false;
 		}
 
+		log_info("Onnx推理模式: CUDA，参数: deviceId={0}", deviceId);
+
 		return true;
+	}
+
+	bool TryAppendOpenVINOExecutionProvider(Ort::SessionOptions& sessionOptions, int threads) {
+		auto api = Ort::GetApi();
+		if (api.SessionOptionsAppendExecutionProvider_OpenVINO == nullptr) {
+			log_error("当前onnxruntime不支持OpenVINO执行提供器接口");
+			return false;
+		}
+
+		OrtOpenVINOProviderOptions providerOptions{};
+		providerOptions.device_type = "CPU_FP32";  // 设置为CPU_FP32模式
+		providerOptions.num_of_threads=threads;  // 设置线程数
+
+		OrtStatus* status = api.SessionOptionsAppendExecutionProvider_OpenVINO(sessionOptions, &providerOptions);
+		if (status != nullptr) {
+			log_error("onnx设置OpenVINO失败：{0}", api.GetErrorMessage(status));
+			api.ReleaseStatus(status);
+			return false;
+		}
+
+		log_info("Onnx推理模式: OpenVINO，参数: threads={0}", threads);
+
+		return true;
+	}
+
+
+	void setCPUSessionOptions(Ort::SessionOptions& session_options, unsigned short intraConcurrency, unsigned short interConcurrency){
+		
+		//设置矩阵运算内部并发数
+		session_options.SetIntraOpNumThreads(intraConcurrency);
+
+
+		//设置会话并发数
+		if (interConcurrency > 0) {
+			session_options.SetExecutionMode(ORT_PARALLEL);
+			session_options.SetInterOpNumThreads(interConcurrency);
+		}
+
+		log_info("Onnx推理模式: CPU, 参数: intraConcurrency={0}, interConcurrency={1}", intraConcurrency, interConcurrency);
+
 	}
 }
 
+void OnnxLoader::setSessionOptions(Ort::SessionOptions& sessionOptions){
+	bool res=false;
+
+	switch (_deviceType) {
+		case NV_CUDA:
+			res = detail::TryAppendCudaExecutionProvider(sessionOptions, _cudaDeviceId);
+			break;
+		case OpenVINO_CPU:
+			res = detail::TryAppendOpenVINOExecutionProvider(sessionOptions, _openvinoThreads);
+			break;
+	}
+
+	if(!res){
+		detail::setCPUSessionOptions(sessionOptions, _intraConcurrency, _interConcurrency);
+	}
+}
 
 void OnnxLoader::load(const char* path, const char* cfg)
 {
 	(void)cfg;
 
 	//Ort环境
-	env=Ort::Env(ORT_LOGGING_LEVEL_WARNING, "yolo");
+	env=Ort::Env(ORT_LOGGING_LEVEL_WARNING, "onnx");
 
 	Ort::SessionOptions sessionOptions;
 	//设置图形优化级别
-	sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_EXTENDED);
+	sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_ALL);
 
 	std::string str(path);
 	std::wstring wstr(str.begin(), str.end());
 
-	if (_usingGPU) {
-		log_info("Onnx推理模式: GPU");
-
-		std::string gpuError;
-		if (detail::TryAppendCudaExecutionProvider(sessionOptions, 0, gpuError)) {
-			log_info("Onnx推理模式: 已启用CUDA执行提供器, device_id: {0}", 0);
-			try {
-				session = Ort::Session(env, wstr.c_str(), sessionOptions);
-				return;
-			}
-			catch (const std::exception& e) {
-				gpuError = e.what();
-				log_warn("Onnx GPU会话创建失败，准备回退CPU推理: {0}", gpuError);
-			}
-		}
-		else {
-			log_warn("Onnx GPU执行器初始化失败，准备回退CPU推理: {0}", gpuError);
-		}
-	}
-
-	
-	log_info("Onnx推理模式: CPU");
-
-	//设置矩阵运算内部并发数
-	if (_intraConcurrency <= 0) {
-		_intraConcurrency = getCPUConcurrency();
-	}
-	log_info("Onnx推理内部并发数: {0}", _intraConcurrency);
-	sessionOptions.SetIntraOpNumThreads(_intraConcurrency);
-
-
-	//设置会话并发数
-	if (_interConcurrency > 0) {
-		log_info("Onnx推理会话并发数: {0}", _interConcurrency);
-		sessionOptions.SetExecutionMode(ORT_PARALLEL);
-		sessionOptions.SetInterOpNumThreads(_interConcurrency);
-	}
+	setSessionOptions(sessionOptions);
 
 	session = Ort::Session(env, wstr.c_str(), sessionOptions);
 

@@ -13,20 +13,24 @@ endif()
 
 add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 
-#opencv库
+#opencv4.8 msvc版本
 include_directories("D:\\gw\\opencv\\opencv\\build\\include")
 link_directories("D:\\gw\\opencv\\opencv\\build\\x64\\vc16\\lib")
+set(OPENCV_WORLD_LIB
+    $<$<CONFIG:Debug>:opencv_world480d.lib>
+    $<$<NOT:$<CONFIG:Debug>>:opencv_world480.lib>
+)
 
 # spdlog 头文件包含形式，可以预编译spdlog库
 set(SPDLOG_DIR "D:/gw/clib/spdlog/spdlog-1.15.1/include")
 include_directories(${SPDLOG_DIR})
 
 # onnxruntime c++ CPU
-# set(ONNX_DLL_DIR "D:/gw/clib/onnxruntime-win-x64-1.24.4/lib")
-# include_directories("D:\\gw\\clib\\onnxruntime-win-x64-1.24.4\\include")
+# set(ONNX_DLL_DIR "D:/gw/clib/onnxruntime-win-x64-gpu-1.24.1/lib")
+# include_directories("D:\\gw\\clib\\onnxruntime-win-x64-gpu-1.24.1\\include")
 # link_directories(${ONNX_DLL_DIR})
 
-# onnxruntime c++ GPU
+# # onnxruntime c++ GPU
 set(ONNX_DLL_DIR "D:/gw/clib/onnxruntime-win-x64-gpu-1.18.0/lib")
 include_directories("D:/gw/clib/onnxruntime-win-x64-gpu-1.18.0/include")
 link_directories(${ONNX_DLL_DIR})
@@ -49,7 +53,7 @@ target_include_directories(dpdetect PRIVATE
 
 target_link_libraries(dpdetect PRIVATE
     dp
-    opencv_world480d.lib
+    ${OPENCV_WORLD_LIB}
     onnxruntime.lib
     onnxruntime_providers_shared.lib
 )
@@ -63,8 +67,8 @@ add_custom_command(TARGET dpdetect POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${ONNX_DLL_DIR}/onnxruntime_providers_shared.dll"
         "$<TARGET_FILE_DIR:dpdetect>/"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${ONNX_DLL_DIR}/onnxruntime_providers_cuda.dll"
-        "$<TARGET_FILE_DIR:dpdetect>/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${ONNX_DLL_DIR}/onnxruntime_providers_cuda.dll"
+    "$<TARGET_FILE_DIR:dpdetect>/"
     COMMENT "Copying ONNX Runtime DLLs to output directory..."
 )

@@ -3,9 +3,9 @@
 #include <opencv2/opencv.hpp>
 #include <thread>
 
-// 获取当前CPU线程数的一半
+// 获取当前CPU线程数
 inline int getCPUConcurrency() {
-	return static_cast<int>(std::thread::hardware_concurrency())/2;
+	return std::thread::hardware_concurrency();
 }
 
 

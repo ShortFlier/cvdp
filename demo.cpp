@@ -51,16 +51,17 @@ cv::Mat drawPred(const cv::Mat& img, const SegmentResArray& resArr, int begin=0,
 	return resImg;
 }
 
+const char* imgPath="test/test.jpg";
 
-void testDetector() {
-	const char* modelPath = R"(C:\Users\qiang\runs\detect\runs\yolov8s_singleclass_onebox_bbox_3g7\weights\best.onnx)";
-	const char* imgPath = R"(C:\Users\qiang\Desktop\document\20251026_131759_465_155.jpg)";
+const char* detectModelPath="model/detect.onnx";
+const char* segmentModelPath="model/segment.onnx";
+
+void testDetectorCPU() {
+	const char* modelPath = detectModelPath;
 
 	yolov8OnnxDetector detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
 	//设置为使用CPU推理
-	detector._modelLoader.setUsingGPU(false);
-	// yolov8CVDNNDetector<> detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
-	// detector._modelLoader.setInputSize(1, 3, 512, 512);
+	detector._modelLoader.setDeviceType(OnnxLoader::DeviceType::CPU);
 
 	detector.loadModel(modelPath);
 	
@@ -76,17 +77,11 @@ void testDetector() {
 	cv::imshow("res", img);
 }
 
-void testSegmenter() {
-	const char* modelPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\output\weights\best640x640.onnx)";
-	//const char* imgPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\train\images\1.jpg)";
-	const char* imgPath = R"(C:\Users\qiang\Desktop\test\20251026_142007_456_542.jpg)";
-
-	//yolov8OnnxCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
+void testSegmenterCPU() {
+	const char* modelPath = segmentModelPath;
 	yolov8OnnxSegmenter segmenter(2);
 	//设置为使用CPU推理
-	segmenter._modelLoader.setUsingGPU(false);
-	// yolov8CVDNNCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
-	// segmenter._modelLoader.setInputSize(1, 3, 640, 640);
+	segmenter._modelLoader.setDeviceType(OnnxLoader::DeviceType::CPU);
 
 	segmenter.loadModel(modelPath);
 	cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
@@ -98,20 +93,19 @@ void testSegmenter() {
 	cv::imshow("res", resImg);
 }
 
-void testOnnxLoaderGpuFallbackDetect() {
+void testDetectorCUDA() {
 	
-	const char* modelPath = R"(C:\Users\qiang\runs\detect\runs\yolov8s_singleclass_onebox_bbox_3g7\weights\best.onnx)";
-	const char* imgPath = R"(C:\Users\qiang\Desktop\document\20251026_131759_465_155.jpg)";
+	const char* modelPath = detectModelPath;
 
-	yolov8OnnxDetector detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
+	yolov8OnnxDetector detector(1, std::vector<float>({ 0.25f }), std::vector<float>({ 0.45f }));
 	detector.loadModel(modelPath);
-	for(int i=0; i<4; ++i){
+	for(int i=0; i<2; ++i){
 
 
 		cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
 		auto resArr = detector.run(img);
 
-		if(i<3){//运行3次预热
+		if(i<1){//运行1次预热
 			continue;
 		}
 
@@ -126,16 +120,33 @@ void testOnnxLoaderGpuFallbackDetect() {
 	}
 }
 
-void testOnnxLoaderGpuFallbackSegment() {
+void testSegmenterCUDA() {
 	
-	const char* modelPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\output\weights\best640x640.onnx)";
-	//const char* imgPath = R"(D:\gw\deeplearning\yolo\yolo_dataset\bamboo\segment\512train\train\images\1.jpg)";
-	const char* imgPath = R"(C:\Users\qiang\Desktop\test\20251026_142007_456_542.jpg)";
-
-	//yolov8OnnxCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
+	const char* modelPath = segmentModelPath;
 	yolov8OnnxSegmenter segmenter(2);
-	// yolov8CVDNNCPUSegmenter<> segmenter(2, std::vector<float>({ 0.25, 0.25 }), std::vector<float>({ 0.45, 0.45 }));
-	// segmenter._modelLoader.setInputSize(1, 3, 640, 640);
+
+
+	segmenter.loadModel(modelPath);
+	cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
+
+	
+	//预热一次
+	segmenter.run(img);
+
+	auto resArr = segmenter.run(img);
+
+	cv::Mat resImg = drawPred(img, resArr);
+
+	cv::namedWindow("res", cv::WINDOW_NORMAL);
+	cv::imshow("res", resImg);
+}
+
+
+void testSegmenterOpenVINO() {
+	
+	const char* modelPath = segmentModelPath;
+	yolov8OnnxSegmenter segmenter(2);
+	segmenter._modelLoader.setDeviceType(OnnxLoader::DeviceType::OpenVINO_CPU);
 
 
 	segmenter.loadModel(modelPath);
@@ -159,10 +170,11 @@ int main()
 
 	logInit(Log_Level::info);
 
-	//testDetector();
-	//testSegmenter();
-	//testOnnxLoaderGpuFallbackDetect();
-	testOnnxLoaderGpuFallbackSegment();
+	//testDetectorCPU();
+	//testSegmenterCPU();
+	//testDetectorCUDA();
+	testSegmenterCUDA();
+	//testSegmenterOpenVINO();
 
 	cv::waitKey();
 

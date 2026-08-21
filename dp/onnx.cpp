@@ -12,6 +12,8 @@ namespace detail {
 			return false;
 		}
 
+		sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_ALL);
+
 		OrtCUDAProviderOptions cuda_options;
 		cuda_options.device_id = deviceId;
 
@@ -28,40 +30,47 @@ namespace detail {
 		return true;
 	}
 
-	bool TryAppendOpenVINOExecutionProvider(Ort::SessionOptions& sessionOptions, int threads) {
+	bool TryAppendOpenVINOExecutionProvider(Ort::SessionOptions& sessionOptions, int threads, int num_streams) {
 		auto api = Ort::GetApi();
 		if (api.SessionOptionsAppendExecutionProvider_OpenVINO == nullptr) {
 			log_error("当前onnxruntime不支持OpenVINO执行提供器接口");
 			return false;
 		}
 
-		OrtOpenVINOProviderOptions providerOptions{};
-		providerOptions.device_type = "CPU_FP32";  // 设置为CPU_FP32模式
-		providerOptions.num_of_threads=threads;  // 设置线程数
+		//关闭onnx高级优化
+		sessionOptions.SetGraphOptimizationLevel(ORT_DISABLE_ALL);
 
-		OrtStatus* status = api.SessionOptionsAppendExecutionProvider_OpenVINO(sessionOptions, &providerOptions);
-		if (status != nullptr) {
-			log_error("onnx设置OpenVINO失败：{0}", api.GetErrorMessage(status));
-			api.ReleaseStatus(status);
+		std::unordered_map<std::string, std::string> options;
+		options["device_type"] = "CPU";
+		options["precision"] = "FP32";
+		options["num_of_threads"] = std::to_string(threads);
+		options["num_streams"] = std::to_string(num_streams);
+
+		try {
+			sessionOptions.AppendExecutionProvider_OpenVINO_V2(options);
+		} catch (const std::exception& e) {
+			log_error("onnx设置OpenVINO V2失败：{0}", e.what());
 			return false;
 		}
 
-		log_info("Onnx推理模式: OpenVINO，参数: threads={0}", threads);
+		log_info("Onnx推理模式: OpenVINO，参数: threads={0}, num_streams={1}", threads, num_streams);
 
 		return true;
 	}
 
 
-	void setCPUSessionOptions(Ort::SessionOptions& session_options, unsigned short intraConcurrency, unsigned short interConcurrency){
+	void setCPUSessionOptions(Ort::SessionOptions& sessionOptions, unsigned short intraConcurrency, unsigned short interConcurrency){
 		
+		sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_ALL);
+
 		//设置矩阵运算内部并发数
-		session_options.SetIntraOpNumThreads(intraConcurrency);
+		sessionOptions.SetIntraOpNumThreads(intraConcurrency);
 
 
 		//设置会话并发数
 		if (interConcurrency > 0) {
-			session_options.SetExecutionMode(ORT_PARALLEL);
-			session_options.SetInterOpNumThreads(interConcurrency);
+			sessionOptions.SetExecutionMode(ORT_PARALLEL);
+			sessionOptions.SetInterOpNumThreads(interConcurrency);
 		}
 
 		log_info("Onnx推理模式: CPU, 参数: intraConcurrency={0}, interConcurrency={1}", intraConcurrency, interConcurrency);
@@ -77,11 +86,13 @@ void OnnxLoader::setSessionOptions(Ort::SessionOptions& sessionOptions){
 			res = detail::TryAppendCudaExecutionProvider(sessionOptions, _cudaDeviceId);
 			break;
 		case OpenVINO_CPU:
-			res = detail::TryAppendOpenVINOExecutionProvider(sessionOptions, _openvinoThreads);
+			_openvinoThreads=_openvinoThreads==0?getCPUConcurrency()/2:_openvinoThreads;
+			res = detail::TryAppendOpenVINOExecutionProvider(sessionOptions, _openvinoThreads, _openvinoNumStreams);
 			break;
 	}
 
 	if(!res){
+		_intraConcurrency=_intraConcurrency==0?getCPUConcurrency()/2:_intraConcurrency;
 		detail::setCPUSessionOptions(sessionOptions, _intraConcurrency, _interConcurrency);
 	}
 }
@@ -94,8 +105,6 @@ void OnnxLoader::load(const char* path, const char* cfg)
 	env=Ort::Env(ORT_LOGGING_LEVEL_WARNING, "onnx");
 
 	Ort::SessionOptions sessionOptions;
-	//设置图形优化级别
-	sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_ALL);
 
 	std::string str(path);
 	std::wstring wstr(str.begin(), str.end());

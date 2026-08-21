@@ -40,17 +40,19 @@ public:
 	*@interConcurrency 设置CPU推理时，inter并发数，0时不设置inter并发
 	*/
 	void setCPUParams(unsigned short intraConcurrency, unsigned short interConcurrency=0) {
-		_intraConcurrency = intraConcurrency==0?getCPUConcurrency()/2:intraConcurrency;
+		_intraConcurrency = intraConcurrency;
 		_interConcurrency = interConcurrency;
 	}
 
 	/*
 	* 设置OpenVINO推理时的参数
 	*@threads，设置OpenVINO推理时的线程数，设置为0时，使用当前CPU线程数一半
+	*@num_streams，设置OpenVINO推理时的流数，设置为0时，使用默认值
 	*/
-	void setOpenVINOCPUParams(unsigned short threads) {
-		_openvinoThreads = threads==0?getCPUConcurrency()/2:threads;
-	}	
+	void setOpenVINOCPUParams(unsigned short threads, unsigned short num_streams=0) {
+		_openvinoThreads = threads;
+		_openvinoNumStreams = num_streams;
+	}
 
 
 	/*
@@ -89,6 +91,7 @@ private:
 
 	//OpenVINO推理时使用的参数
 	unsigned short _openvinoThreads=0;
+	unsigned short _openvinoNumStreams=0;
 
 	//CUDA推理时使用的参数
 	unsigned short _cudaDeviceId=0;

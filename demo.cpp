@@ -48,6 +48,8 @@ cv::Mat drawPred(const cv::Mat& img, const SegmentResArray& resArr, int begin=0,
 		}
 	}
 
+	cv::imwrite("res.jpg", resImg);
+
 	return resImg;
 }
 
@@ -145,9 +147,9 @@ void testSegmenterCUDA() {
 void testSegmenterOpenVINO() {
 	
 	const char* modelPath = segmentModelPath;
-	yolov8OnnxSegmenter segmenter(2);
+	yolov8OnnxSegmenter segmenter(2, std::vector<float>({ 0.5f, 0.5f }), std::vector<float>({ 0.5f, 0.5f }));
 	segmenter._modelLoader.setDeviceType(OnnxLoader::DeviceType::OpenVINO_CPU);
-
+	segmenter._modelLoader.setOpenVINOCPUParams(0, 1);
 
 	segmenter.loadModel(modelPath);
 	cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
@@ -155,13 +157,23 @@ void testSegmenterOpenVINO() {
 	
 	//预热一次
 	segmenter.run(img);
+	log_info("预热完成");
 
-	auto resArr = segmenter.run(img);
+	while(true){
+		auto resArr = segmenter.run(img);
 
-	cv::Mat resImg = drawPred(img, resArr);
+		cv::Mat resImg = drawPred(img, resArr);
 
-	cv::namedWindow("res", cv::WINDOW_NORMAL);
-	cv::imshow("res", resImg);
+		cv::destroyAllWindows();
+		cv::namedWindow("res", cv::WINDOW_NORMAL);
+		cv::imshow("res", resImg);
+
+		log_info("按任意键继续，按ESC退出");
+		int key = cv::waitKey();
+		if (key == 27) { // ESC key
+			break;
+		}
+	}
 }
 
 int main()
@@ -173,8 +185,8 @@ int main()
 	//testDetectorCPU();
 	//testSegmenterCPU();
 	//testDetectorCUDA();
-	testSegmenterCUDA();
-	//testSegmenterOpenVINO();
+	//testSegmenterCUDA();
+	testSegmenterOpenVINO();
 
 	cv::waitKey();
 

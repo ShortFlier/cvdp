@@ -12,9 +12,7 @@ inline int getCPUConcurrency() {
 
 
 // 根据中心点坐标和宽高生成矩形框
-inline cv::Rect rect(double cx, double cy, double w, double h) {
-	return cv::Rect(cv::Point(cx - w / 2, cy - h / 2), cv::Size(w, h));
-}
+cv::Rect rect(double cx, double cy, double w, double h);
 
 // 将矩形框从一个尺寸缩放到另一个尺寸
 cv::Rect scaleRect(const cv::Rect& box, const cv::Size& fromSize, const cv::Size& toSize);

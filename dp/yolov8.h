@@ -18,6 +18,9 @@ public:
 
 	DetectResArray operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, cv::Size inputSize, const std::vector<std::vector<int>>& outputSizes,
 		int classNum,  const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs);
+
+private:
+	LetterBoxT _letterBox;
 };
 
 
@@ -59,8 +62,8 @@ DetectResArray Yolov8DetectLetterBoxResultParser<LetterBoxT>::operator()(std::ve
 			int index = indexs[j];
 
 			//对应原图矩形框大小
-			LetterBoxT letterbox(oriSize, inputSize, cv::Scalar(114, 114, 114));
-			cv::Rect box = letterbox.enRect(boxs[i][index]);
+			_letterBox.set(oriSize, inputSize, cv::Scalar(114, 114, 114));
+			cv::Rect box = _letterBox.enRect(boxs[i][index]);
 
 			resArr[i].push_back(DetectRes(box, scores[i][index]));
 		}
@@ -82,6 +85,9 @@ public:
 
 	SegmentResArray operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, cv::Size inputSize, const std::vector<std::vector<int>>& outputSizes,
 		int classNum, const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs);
+
+private:
+	LetterBoxT _letterBox;
 };
 
 
@@ -107,7 +113,6 @@ SegmentResArray Yolov8SegmentLetterBoxResultParser<LetterBoxT>::operator()(std::
 	*/	
 	std::vector<cv::Rect> outputBoxs;
 	std::vector<std::vector<float>> scores(classNum);
-	std::vector<cv::Mat> ceofs;
 
 	cv::Mat predMat=outputs[0].reshape(1, outputSizes[0][0] * outputSizes[0][1]);
 	//每一列向量是一个预测,[cx, cy, w, h, class1_score, ..., ceof]
@@ -125,7 +130,6 @@ SegmentResArray Yolov8SegmentLetterBoxResultParser<LetterBoxT>::operator()(std::
 			scores[i].push_back(predMat.at<float>(4 + i, c));
 		}
 
-		ceofs.push_back(predMat.col(c).rowRange(4 + classNum, predMat.rows));
 	}
 
 	//NMS操作
@@ -143,8 +147,8 @@ SegmentResArray Yolov8SegmentLetterBoxResultParser<LetterBoxT>::operator()(std::
 	int seg_h=outputSizes[1][2];
 	int seg_w=outputSizes[1][3];
 
-	LetterBoxT letterbox(oriSize, inputSize, cv::Scalar(114, 114, 114));
-	cv::Vec4d params = letterbox.params();
+	_letterBox.set(oriSize, inputSize, cv::Scalar(114, 114, 114));
+	cv::Vec4d params = _letterBox.params();
 
 	for(int i=0; i<classNum; ++i) {
 		for(int j=0; j<classIndexs[i].size(); ++j) {
@@ -153,7 +157,7 @@ SegmentResArray Yolov8SegmentLetterBoxResultParser<LetterBoxT>::operator()(std::
 			/*
 				提取掩膜特征图对应区域，计算分割掩膜，减少计算量
 			*/
-			cv::Rect oriRect = letterbox.enRect(outputBoxs[index]);
+			cv::Rect oriRect = _letterBox.enRect(outputBoxs[index]);
 			int net_width = inputSize.width;
 			int net_height = inputSize.height;
 
@@ -185,9 +189,10 @@ SegmentResArray Yolov8SegmentLetterBoxResultParser<LetterBoxT>::operator()(std::
 
 			cv::Mat temp_mask_protos = mask_protos(ranges).clone();
 			temp_mask_protos = temp_mask_protos.reshape(0, {seg_c, rang_w * rang_h});
-			cv::Mat ceof(ceofs[index].t());
 
-						cv::Mat mask_feature = ceof * temp_mask_protos;
+			cv::Mat ceof=predMat.col(index).rowRange(4 + classNum, predMat.rows).t();
+
+			cv::Mat mask_feature = ceof * temp_mask_protos;
 			mask_feature = mask_feature.reshape(0, rang_h);
 
 			cv::Mat dest;
@@ -200,7 +205,7 @@ SegmentResArray Yolov8SegmentLetterBoxResultParser<LetterBoxT>::operator()(std::
 			int height = static_cast<int>(std::ceil(net_height / static_cast<double>(seg_h) * rang_h / params[1]));
 
 			cv::Mat maskPatch;
-			cv::resize(dest, maskPatch, cv::Size(width, height), cv::INTER_LINEAR);
+			cv::resize(dest, maskPatch, cv::Size(width, height), 0, 0, cv::INTER_LINEAR);
 			cv::Mat finalMask = maskPatch(oriRect - cv::Point(left, top));
 
 			cv::Mat oriMask;
@@ -228,11 +233,72 @@ public:
 
 using SimpleLetterBoxConfig = LetterBoxConfig<false, false, false, 32>;
 
+template<typename Yolov8OnnxDP>
+class Yolov8OnnxDPImpl:public Yolov8OnnxDP{
+public:
+	//使用父类构造函数	
+	using Yolov8OnnxDP::Yolov8OnnxDP;
 
-using yolov8OnnxDetector = DPDetector< OnnxLoader, typename SimpleLetterBoxConfig::Normalizer, SingleInputOnnxRunner, typename SimpleLetterBoxConfig::DetectParser>;
+	/*
+	//扁平化接口
+	*/
 
-using yolov8OnnxSegmenter = DPSegmentor< OnnxLoader, typename SimpleLetterBoxConfig::Normalizer, SingleInputOnnxRunner, typename SimpleLetterBoxConfig::SegmentParser>;
+	//设置使用推理设备
+	void setDeviceType(OnnxLoader::DeviceType deviceType){
+		this->_modelLoader.setDeviceType(deviceType);
+	}
+	
+	/*
+	* 设置使用cpu推理时的参数
+	*@intraConcurrency 设置CPU推理时，intra并发数，设置0时，设置为当前CPU线程数一半
+	*@interConcurrency 设置CPU推理时，inter并发数，0时不设置inter并发
+	*/
+	void setCPUParams(unsigned short intraConcurrency, unsigned short interConcurrency=0) {
+		this->_modelLoader.setCPUParams(intraConcurrency, interConcurrency);
+	}
 
+	/*
+	* 设置OpenVINO推理时的参数
+	*@threads，设置OpenVINO推理时的线程数，设置为0时，使用当前CPU线程数一半
+	*@num_streams，设置OpenVINO推理时的流数，设置为0时，使用默认值
+	*/
+	void setOpenVINOCPUParams(unsigned short threads, unsigned short num_streams=0) {
+		this->_modelLoader.setOpenVINOCPUParams(threads, num_streams);
+	}
+
+
+	/*
+	* 设置CUDA推理参数
+	*@deviceId 设置CUDA设备ID
+	*/
+	void setCUDAParams(unsigned short deviceId) {
+		this->_modelLoader.setCUDAParams(deviceId);
+	}
+
+
+
+	//设置缩放系数
+	void setScaleFactor(float scalefactor) {
+		this->_normalizer.setScaleFactor(scalefactor);
+	}
+
+	//设置填充颜色
+	void setFillColor(const cv::Scalar& fillColor) {
+		this->_normalizer.setFillColor(fillColor);
+	}
+
+	//设置是否交换BGR通道
+	void setSwapRB(bool swapRB) {
+		this->_normalizer.setSwapRB(swapRB);
+	}
+
+};
+
+using yolov8OnnxDetector = Yolov8OnnxDPImpl<DPDetector< OnnxLoader, typename SimpleLetterBoxConfig::Normalizer, SingleInputOnnxRunner, typename SimpleLetterBoxConfig::DetectParser>>;
+
+using yolov8OnnxSegmenter = Yolov8OnnxDPImpl<DPSegmentor< OnnxLoader, typename SimpleLetterBoxConfig::Normalizer, SingleInputOnnxRunner, typename SimpleLetterBoxConfig::SegmentParser>>;
+
+//不建议使用opencv::dnn::net推理，建议使用onnxruntime推理
 using yolov8CVDNNCPUDetector= DPDetector< CVDnnLoaderCPU, typename SimpleLetterBoxConfig::Normalizer, CVDNNRunner, typename SimpleLetterBoxConfig::DetectParser>;
-
+//不建议使用opencv::dnn::net推理，建议使用onnxruntime推理
 using yolov8CVDNNSCPUegmenter= DPSegmentor< CVDnnLoaderCPU, typename SimpleLetterBoxConfig::Normalizer, CVDNNRunner, typename SimpleLetterBoxConfig::SegmentParser>;

@@ -12,7 +12,7 @@ namespace detail {
 			return false;
 		}
 
-		sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_ALL);
+		sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
 
 		OrtCUDAProviderOptions cuda_options;
 		cuda_options.device_id = deviceId;

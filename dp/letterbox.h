@@ -16,6 +16,8 @@
 template<bool autoShape = false, bool scaleFill = false, bool scaleUp = false, int stride = 32>
 class LetterBox {
 public:
+	LetterBox() = default;
+
 	LetterBox(cv::Size srcSize, cv::Size targetSize,
 		const cv::Scalar& color = cv::Scalar::all(0));
 
@@ -153,13 +155,17 @@ template<bool autoShape, bool scaleFill, bool scaleUp, int stride>
 inline cv::Rect LetterBox<autoShape, scaleFill, scaleUp, stride>::enRect(const cv::Rect& rect) const
 {
 	// 将检测框从 letterbox 后的坐标系反算回原图坐标系。
-	int x = static_cast<int>(std::round((rect.x - _params[2]) / _params[0]));
-	int y = static_cast<int>(std::round((rect.y - _params[3]) / _params[1]));
-	int width = static_cast<int>(std::round(rect.width / _params[0]));
-	int height = static_cast<int>(std::round(rect.height / _params[1]));
+	int ltx = static_cast<int>(std::floor((rect.x - _params[2]) / _params[0]));
+	int lty = static_cast<int>(std::floor((rect.y - _params[3]) / _params[1]));
+
+	int rbx = static_cast<int>(std::ceil((rect.x + rect.width - _params[2]) / _params[0]));
+	int rby = static_cast<int>(std::ceil((rect.y + rect.height - _params[3]) / _params[1]));
+
+	int width = rbx - ltx;
+	int height = rby - lty;
 
 	// 再裁剪到原图有效范围内，避免越界。
-	cv::Rect oriRect(x, y, width, height);
+	cv::Rect oriRect(ltx, lty, width, height);
 	return rectValidate(oriRect, _srcSize);
 }
 
@@ -177,18 +183,29 @@ inline cv::Rect LetterBox<autoShape, scaleFill, scaleUp, stride>::enRect(const c
 */
 template<typename LetterBoxT>
 class LetterBoxNormalizer {
-public:
-	LetterBoxNormalizer() = default;
-
+private:
 	float _scalefactor = 1.0f/255.0f;
 	cv::Scalar _fillColor = cv::Scalar(114, 114, 114);
 	bool _swapRB = true;
 
+	LetterBoxT _letterBox;
+public:
+	void setScaleFactor(float scalefactor) {
+		_scalefactor = scalefactor;
+	}
+
+	void setFillColor(const cv::Scalar& fillColor) {
+		_fillColor = fillColor;
+	}
+
+	void setSwapRB(bool swapRB) {
+		_swapRB = swapRB;
+	}
+
 	cv::Mat operator()(cv::Mat srcMat, cv::Size targetSize) {
 		//使用LetterBox缩放指定尺寸
-		LetterBoxT box(srcMat.size(), targetSize, _fillColor);
-		cv::Mat mat = box.apply(srcMat);
-
+		_letterBox.set(srcMat.size(), targetSize, _fillColor);
+		cv::Mat mat = _letterBox.apply(srcMat);
 
 		//归一化
 		cv::Mat blob=cv::dnn::blobFromImage(mat, _scalefactor, cv::Size(), cv::Scalar(), _swapRB, false);

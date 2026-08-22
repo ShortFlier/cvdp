@@ -15,7 +15,7 @@
 * _intraConcurrency: CPU推理时，intra并发数，设置0时，设置为当前CPU线程数一半
 * _interConcurrency: CPU推理时，inter并发数，0时不设置inter并发
 */
-class OnnxLoader {
+class OnnxLoader{
 
 	
 public:

@@ -63,7 +63,7 @@ void testDetectorCPU() {
 
 	yolov8OnnxDetector detector(1, std::vector<float>({ 0.25 }), std::vector<float>({ 0.45 }));
 	//设置为使用CPU推理
-	detector._modelLoader.setDeviceType(OnnxLoader::DeviceType::CPU);
+	detector.setDeviceType(OnnxLoader::DeviceType::CPU);
 
 	detector.loadModel(modelPath);
 	
@@ -83,7 +83,7 @@ void testSegmenterCPU() {
 	const char* modelPath = segmentModelPath;
 	yolov8OnnxSegmenter segmenter(2);
 	//设置为使用CPU推理
-	segmenter._modelLoader.setDeviceType(OnnxLoader::DeviceType::CPU);
+	segmenter.setDeviceType(OnnxLoader::DeviceType::CPU);
 
 	segmenter.loadModel(modelPath);
 	cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
@@ -148,8 +148,8 @@ void testSegmenterOpenVINO() {
 	
 	const char* modelPath = segmentModelPath;
 	yolov8OnnxSegmenter segmenter(2, std::vector<float>({ 0.5f, 0.5f }), std::vector<float>({ 0.5f, 0.5f }));
-	segmenter._modelLoader.setDeviceType(OnnxLoader::DeviceType::OpenVINO_CPU);
-	segmenter._modelLoader.setOpenVINOCPUParams(0, 1);
+	segmenter.setDeviceType(OnnxLoader::DeviceType::OpenVINO_CPU);
+	segmenter.setOpenVINOCPUParams(0, 1);
 
 	segmenter.loadModel(modelPath);
 	cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);

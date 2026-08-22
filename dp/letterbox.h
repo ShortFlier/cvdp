@@ -24,18 +24,21 @@ public:
 	void set(cv::Size srcSize, cv::Size targetSize,
 		const cv::Scalar& color);
 
+		// [ratio_x, ratio_y, pad_x, pad_y]
 	cv::Vec4d params() const {
 		return _params;
 	}
 
 	cv::Mat apply(const cv::Mat& srcMat) const;
+
+	// 将检测框从 letterbox 后的坐标系反算回原图坐标系。
 	cv::Rect enRect(const cv::Rect& rect) const;
 
 private:
 	cv::Size _srcSize;
 	cv::Size _targetSize;
 	cv::Scalar _color;
-	cv::Vec4d _params; // [ratio_x, ratio_y, dw, dh]
+	cv::Vec4d _params; // [ratio_x, ratio_y, pad_x, pad_y]
 };
 
 template<bool autoShape, bool scaleFill, bool scaleUp, int stride>

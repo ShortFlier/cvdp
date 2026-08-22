@@ -161,6 +161,8 @@ SegmentResArray Yolov8SegmentLetterBoxResultParser<LetterBoxT>::operator()(std::
 			int net_width = inputSize.width;
 			int net_height = inputSize.height;
 
+
+			//计算mask_protos对应的区域
 			int rang_x = static_cast<int>(std::floor((oriRect.x * params[0] + params[2]) / net_width * seg_w));
 			int rang_y = static_cast<int>(std::floor((oriRect.y * params[1] + params[3]) / net_height * seg_h));
 			int rang_w = static_cast<int>(std::ceil(((oriRect.x + oriRect.width) * params[0] + params[2]) / net_width * seg_w)) - rang_x;
@@ -187,6 +189,8 @@ SegmentResArray Yolov8SegmentLetterBoxResultParser<LetterBoxT>::operator()(std::
 			ranges.push_back(cv::Range(rang_y, rang_y + rang_h));
 			ranges.push_back(cv::Range(rang_x, rang_x + rang_w));
 
+
+			//提取对应区域的mask_protos，运算掩膜
 			cv::Mat temp_mask_protos = mask_protos(ranges).clone();
 			temp_mask_protos = temp_mask_protos.reshape(0, {seg_c, rang_w * rang_h});
 
@@ -199,6 +203,8 @@ SegmentResArray Yolov8SegmentLetterBoxResultParser<LetterBoxT>::operator()(std::
 			cv::exp(-mask_feature, dest);
 			dest = 1.0 / (1.0 + dest);
 
+
+			//mask_protos区域映射到原图区域
 			int left = static_cast<int>(std::floor((net_width / static_cast<double>(seg_w) * rang_x - params[2]) / params[0]));
 			int top = static_cast<int>(std::floor((net_height / static_cast<double>(seg_h) * rang_y - params[3]) / params[1]));
 			int width = static_cast<int>(std::ceil(net_width / static_cast<double>(seg_w) * rang_w / params[0]));
@@ -217,8 +223,6 @@ SegmentResArray Yolov8SegmentLetterBoxResultParser<LetterBoxT>::operator()(std::
 
 	return resArr;
 }
-
-
 
 
 

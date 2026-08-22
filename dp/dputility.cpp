@@ -8,7 +8,7 @@ cv::Rect rect(double cx, double cy, double w, double h) {
 	int rby= static_cast<int>(std::round(cy + h / 2));
 
 
-	return cv::Rect(cv::Point(ltx, lty), cv::Point(rbx, rby));
+	return cv::Rect(ltx, lty, rbx - ltx, rby - lty);
 }
 
 //将矩形框从一个尺寸缩放到另一个尺寸

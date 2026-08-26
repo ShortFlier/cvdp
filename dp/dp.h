@@ -29,6 +29,7 @@ struct DetectRes
 
 	DetectRes(){}
 	DetectRes(const cv::Rect& rect, float s):box(rect), score(s){}
+
 };
 typedef std::vector<std::vector<DetectRes>> DetectResArray;
 
@@ -105,7 +106,7 @@ public:
 template<typename _Parser>
 class ParserBase{
 public:
-	virtual typename _Parser::_Result operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, cv::Size inputSize,
+	typename _Parser::_Result operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, cv::Size inputSize,
 								const std::vector<std::vector<int>>& outputSizes, int classNum,
 								const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs){
 		return static_cast<_Parser*>(this)->parse(outputs, oriSize, inputSize, outputSizes, classNum, socreThreshs, nmsThreshs);

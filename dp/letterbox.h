@@ -24,7 +24,7 @@ public:
 	void set(cv::Size srcSize, cv::Size targetSize,
 		const cv::Scalar& color);
 
-		// [ratio_x, ratio_y, pad_x, pad_y]
+	// [ratio_x, ratio_y, pad_x, pad_y]
 	cv::Vec4d params() const {
 		return _params;
 	}

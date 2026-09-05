@@ -8,6 +8,7 @@
 
 #include "log.h"
 
+#include "dp.h"
 
 /*
 * onnxruntime的模型加载
@@ -15,7 +16,7 @@
 * _intraConcurrency: CPU推理时，intra并发数，设置0时，设置为当前CPU线程数一半
 * _interConcurrency: CPU推理时，inter并发数，0时不设置inter并发
 */
-class OnnxLoader{
+class OnnxLoader:public ModelLoaderBase<OnnxLoader, Ort::Session>{
 
 	
 public:
@@ -65,15 +66,15 @@ public:
 
 
 	//返回会话
-	Ort::Session& get(){
+	Ort::Session& getImpl(){
 		return session;
 	}
 
 	//加载模型
-	void load(const char* path, const char* cfg = nullptr);
+	void loadImpl(const char* path, const char* cfg = nullptr);
 
 	//返回输入、输出张量大小
-	void getSize(cv::Vec4i& inputSize, std::vector<std::vector<int>>& outputSizes);
+	void getSizeImpl(std::vector<std::vector<int>>& inputSize, std::vector<std::vector<int>>& outputSizes);
 
 private:
 	// Env must outlive Session, so declare Env before Session.
@@ -100,10 +101,21 @@ private:
 
 
 
-//onnxruntime的单输入运行推理
-class SingleInputOnnxRunner {
+//onnxruntime运行推理
+class OnnxRunner:public RunnerBase<OnnxRunner, Ort::Session>{
 public:
-	SingleInputOnnxRunner() {}
+	OnnxRunner() {}
 
-	std::vector<cv::Mat> operator()(Ort::Session& session, cv::Mat blob);
+	std::vector<cv::Mat> run(Ort::Session& session, std::vector<cv::Mat>& input);
+	
+private:
+	void initializeSessionParameters(Ort::Session& session);
+
+	const OrtSession* _sessionHandle = nullptr;
+	std::vector<std::string> _inputNames;
+	std::vector<const char*> _inputNameArr;
+	std::vector<std::vector<int64_t>> _inputShapes;
+	std::vector<std::string> _outputNames;
+	std::vector<const char*> _outputNameArr;
+	std::vector<std::vector<int>> _outputSizes;
 };

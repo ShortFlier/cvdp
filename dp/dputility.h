@@ -9,6 +9,9 @@ inline int getCPUConcurrency() {
 }
 
 
+//从模型输入张量获取输入图片大小
+cv::Size getImageInputSize(const std::vector<std::vector<int>>& inputSize, int index);
+
 
 
 // 根据中心点坐标和宽高生成矩形框

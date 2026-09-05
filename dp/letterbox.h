@@ -2,6 +2,8 @@
 
 #include "dputility.h"
 
+#include "dp.h"
+
 /*
 	@srcMat 输入图像
 	@targetSize 目标尺寸
@@ -184,8 +186,8 @@ inline cv::Rect LetterBox<autoShape, scaleFill, scaleUp, stride>::enRect(const c
 	LetterBox预处理器
 	处理后返回指定大小，并且归一化到[0,1]的浮点图像。
 */
-template<typename LetterBoxT>
-class LetterBoxNormalizer {
+template<typename LetterBoxT, int index>
+class LetterBoxNormalizer: public NormalizerBase<LetterBoxNormalizer<LetterBoxT, index>>{
 private:
 	float _scalefactor = 1.0f/255.0f;
 	cv::Scalar _fillColor = cv::Scalar(114, 114, 114);
@@ -205,15 +207,16 @@ public:
 		_swapRB = swapRB;
 	}
 
-	cv::Mat operator()(cv::Mat srcMat, cv::Size targetSize) {
+	std::vector<cv::Mat> normalize(cv::Mat srcMat, const std::vector<std::vector<int>>& inputSize) {
+		cv::Size targetSize=getImageInputSize(inputSize, index);
+		
 		//使用LetterBox缩放指定尺寸
 		_letterBox.set(srcMat.size(), targetSize, _fillColor);
 		cv::Mat mat = _letterBox.apply(srcMat);
 
-		//归一化
 		cv::Mat blob=cv::dnn::blobFromImage(mat, _scalefactor, cv::Size(), cv::Scalar(), _swapRB, false);
 
-		return blob;
+		return std::vector<cv::Mat>{blob};
 	}
 
 

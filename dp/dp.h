@@ -53,9 +53,9 @@ typedef std::vector<std::vector<SegmentRes>> SegmentResArray;
 
 /*
 	深度学习模型加载类
-		load，加载模型
-		get，返回可用模型
-		getSize， 返回模型输入输出尺寸
+		load,函数loadImpl，加载模型
+		get,函数getImpl，返回可用模型
+		getSize,函数getSizeImpl， 返回模型输入输出尺寸
 */
 template<typename _ModelLoader, typename _Model>
 class ModelLoaderBase{
@@ -66,7 +66,7 @@ public:
 	_Model& get(){
 		return static_cast<_ModelLoader*>(this)->getImpl();
 	}
-	void getSize(cv::Vec4i& inputSize, std::vector<std::vector<int>>& outputSize){
+	void getSize(std::vector<std::vector<int>>& inputSize, std::vector<std::vector<int>>& outputSize){
 		static_cast<_ModelLoader*>(this)->getSizeImpl(inputSize, outputSize);
 	}
 };
@@ -74,25 +74,25 @@ public:
 
 /*
 	图像归一化器
-	  函数符operator()，归一化图像，转为张量
+		operator(),函数normalize，归一化图像，预备输入数据，转为张量输入集
 */
 template<typename _Normalizer>
 class NormalizerBase{
 public:
-	cv::Mat operator()(const cv::Mat& src, const cv::Size& targetSize){
-		return static_cast<_Normalizer*>(this)->normalize(src, targetSize);
+	std::vector<cv::Mat> operator()(const cv::Mat& src, const std::vector<std::vector<int>>& inputSize){
+		return static_cast<_Normalizer*>(this)->normalize(src, inputSize);
 	}
 };
 
 
 /*
 	模型运行器
-		函数符operator()，使用模型进行推理，返回结果张量
+		operator()，函数run，使用模型进行推理，返回结果张量
 */
 template<typename _Runner, typename _Model>
 class RunnerBase{
 public:
-	std::vector<cv::Mat> operator()(_Model& model,  cv::Mat& input){
+	std::vector<cv::Mat> operator()(_Model& model,  std::vector<cv::Mat>& input){
 		return static_cast<_Runner*>(this)->run(model, input);
 	}
 
@@ -101,12 +101,14 @@ public:
 
 /*
 	结果解析器
-		函数符operator()，解析模型输出的结果张量，返回结果数组
+		operator()，函数parse，解析模型输出的结果张量，返回结果数组
+
 */
-template<typename _Parser>
+template<typename _Parser, typename _Result>
 class ParserBase{
 public:
-	typename _Parser::_Result operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, cv::Size inputSize,
+
+	typename _Result operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, const std::vector<std::vector<int>>& inputSize,
 								const std::vector<std::vector<int>>& outputSizes, int classNum,
 								const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs){
 		return static_cast<_Parser*>(this)->parse(outputs, oriSize, inputSize, outputSizes, classNum, socreThreshs, nmsThreshs);
@@ -148,7 +150,7 @@ class _DPBase {
 		_Parser _parser;
 
 		//输入张量大小
-		cv::Vec4i _inputSize;
+		std::vector<std::vector<int>> _inputSize;
 		//输出张量大小
 		std::vector<std::vector<int>> _outputSize;
 
@@ -206,7 +208,10 @@ class _DPBase {
 			_modelLoader.getSize(_inputSize, _outputSize);
 
 			
-			log_info("模型输入大小: [{0},{1},{2},{3}]", _inputSize[0], _inputSize[1], _inputSize[2], _inputSize[3]);
+			log_info("模型输入{0}: ", _inputSize.size());
+			for (size_t i = 0; i < _inputSize.size(); ++i) {
+				log_info("======输入{0}: [{1}]", i, fmt::join(_inputSize[i], ","));
+			}
 			
 			log_info("模型输出{0}: ", _outputSize.size());
 			for (size_t i = 0; i < _outputSize.size(); ++i) {
@@ -218,23 +223,23 @@ class _DPBase {
 		_Result run(const cv::Mat srcMat) {
 			_Result res;
 
-			cv::Size oriSize = srcMat.size();
-			log_info("原图大小: [{0}, {1}]", oriSize.width, oriSize.height);
+			ELAPSED("总推理", 
+				cv::Size oriSize = srcMat.size();
+				log_info("原图大小: [{0}, {1}]", oriSize.width, oriSize.height);
 
-			//归一化
-			log_info("执行归一化");
-			cv::Size targetSize(_inputSize[3], _inputSize[2]);
-			cv::Mat bold = _normalizer(srcMat, targetSize);
+				//归一化
+				log_info("执行归一化");
+				std::vector<cv::Mat> inputDatas = _normalizer(srcMat, _inputSize);
 
-			//运行
-			log_info("执行模型推理");
-			std::vector<cv::Mat> resBold;
-			ELAPSED("模型推理", resBold = _runner(_modelLoader.get(), bold));
+				//运行
+				log_info("执行模型推理");
+				std::vector<cv::Mat> resBold;
+				ELAPSED("模型推理", resBold = _runner(_modelLoader.get(), inputDatas));
 
-			//解析结果
-			log_info("解析结果");
-			ELAPSED("结果解析", res = _parser(resBold, oriSize, targetSize, _outputSize, _classNum, _threshs, _nmsThreshs));
-
+				//解析结果
+				log_info("解析结果");
+				ELAPSED("结果解析", res = _parser(resBold, oriSize, _inputSize, _outputSize, _classNum, _threshs, _nmsThreshs));
+			);
 
 			return res;
 		}

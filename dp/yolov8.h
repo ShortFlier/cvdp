@@ -11,12 +11,12 @@
 
 
 //yolov8检测模型结果解析
-template<typename LetterBoxT>
-class Yolov8DetectLetterBoxResultParser {
+template<typename LetterBoxT, int index>
+class Yolov8DetectLetterBoxResultParser:public ParserBase<Yolov8DetectLetterBoxResultParser<LetterBoxT, index>, DetectResArray>{
 public:
 	Yolov8DetectLetterBoxResultParser(){}
 
-	DetectResArray operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, cv::Size inputSize, const std::vector<std::vector<int>>& outputSizes,
+	DetectResArray parse(std::vector<cv::Mat>& outputs, cv::Size oriSize, const std::vector<std::vector<int>>& inputSize, const std::vector<std::vector<int>>& outputSizes,
 		int classNum,  const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs);
 
 private:
@@ -24,11 +24,14 @@ private:
 };
 
 
-template<typename LetterBoxT>
-DetectResArray Yolov8DetectLetterBoxResultParser<LetterBoxT>::operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, cv::Size inputSize,
+template<typename LetterBoxT, int index>
+DetectResArray Yolov8DetectLetterBoxResultParser<LetterBoxT, index>::parse(std::vector<cv::Mat>& outputs, cv::Size oriSize, const std::vector<std::vector<int>>& _inputSize,
 	const std::vector<std::vector<int>>& outputSizes, int classNum, const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs)
 {
 	DetectResArray resArr(classNum);
+
+	//模型图片输入大小
+	cv::Size inputSize=getImageInputSize(_inputSize, index);
 
 	//只有一个输出
 	cv::Mat& outputMat = outputs.at(0);
@@ -78,12 +81,12 @@ DetectResArray Yolov8DetectLetterBoxResultParser<LetterBoxT>::operator()(std::ve
 
 
 //yolov8分割模型结果解析
-template<typename LetterBoxT>
-class Yolov8SegmentLetterBoxResultParser {
+template<typename LetterBoxT, int index>
+class Yolov8SegmentLetterBoxResultParser:public ParserBase<Yolov8SegmentLetterBoxResultParser<LetterBoxT, index>, SegmentResArray>{
 public:
 	Yolov8SegmentLetterBoxResultParser(){}
 
-	SegmentResArray operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, cv::Size inputSize, const std::vector<std::vector<int>>& outputSizes,
+	SegmentResArray parse(std::vector<cv::Mat>& outputs, cv::Size oriSize, const std::vector<std::vector<int>>& _inputSize, const std::vector<std::vector<int>>& outputSizes,
 		int classNum, const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs);
 
 private:
@@ -91,11 +94,14 @@ private:
 };
 
 
-template<typename LetterBoxT>
-SegmentResArray Yolov8SegmentLetterBoxResultParser<LetterBoxT>::operator()(std::vector<cv::Mat>& outputs, cv::Size oriSize, cv::Size inputSize,
+template<typename LetterBoxT, int index>
+SegmentResArray Yolov8SegmentLetterBoxResultParser<LetterBoxT, index>::parse(std::vector<cv::Mat>& outputs, cv::Size oriSize, const std::vector<std::vector<int>>& _inputSize,
 	 const std::vector<std::vector<int>>& outputSizes,	int classNum, const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs)
 {
 	SegmentResArray resArr(classNum);
+
+	//模型图片输入大小
+	cv::Size inputSize=getImageInputSize(_inputSize, index);
 
 	/*
 	outputs应该有两个输出张量
@@ -226,16 +232,16 @@ SegmentResArray Yolov8SegmentLetterBoxResultParser<LetterBoxT>::operator()(std::
 
 
 
-template<bool autoShape = false, bool scaleFill = false, bool scaleUp = false, int stride = 32>
+template<bool autoShape = false, bool scaleFill = false, bool scaleUp = false, int stride = 32, int index=0>
 class LetterBoxConfig {
 public:
 	using Box = LetterBox<autoShape, scaleFill, scaleUp, stride>;
-	using Normalizer = LetterBoxNormalizer<Box>;
-	using DetectParser = Yolov8DetectLetterBoxResultParser<Box>;
-	using SegmentParser = Yolov8SegmentLetterBoxResultParser<Box>;
+	using Normalizer = LetterBoxNormalizer<Box, index>;
+	using DetectParser = Yolov8DetectLetterBoxResultParser<Box, index>;
+	using SegmentParser = Yolov8SegmentLetterBoxResultParser<Box, index>;
 };
 
-using SimpleLetterBoxConfig = LetterBoxConfig<false, false, false, 32>;
+using SimpleLetterBoxConfig = LetterBoxConfig<false, false, false, 32, 0>;
 
 template<typename Yolov8OnnxDP>
 class Yolov8OnnxDPImpl:public Yolov8OnnxDP{
@@ -253,7 +259,7 @@ public:
 	}
 	
 	/*
-	* 设置使用cpu推理时的参数
+	* 设置使用cpu推理时的参数，设置intra并发数优于设置inter并发数
 	*@intraConcurrency 设置CPU推理时，intra并发数，设置0时，设置为当前CPU线程数一半
 	*@interConcurrency 设置CPU推理时，inter并发数，0时不设置inter并发
 	*/
@@ -298,9 +304,9 @@ public:
 
 };
 
-using yolov8OnnxDetector = Yolov8OnnxDPImpl<DPDetector< OnnxLoader, typename SimpleLetterBoxConfig::Normalizer, SingleInputOnnxRunner, typename SimpleLetterBoxConfig::DetectParser>>;
+using yolov8OnnxDetector = Yolov8OnnxDPImpl<DPDetector< OnnxLoader, typename SimpleLetterBoxConfig::Normalizer, OnnxRunner, typename SimpleLetterBoxConfig::DetectParser>>;
 
-using yolov8OnnxSegmenter = Yolov8OnnxDPImpl<DPSegmentor< OnnxLoader, typename SimpleLetterBoxConfig::Normalizer, SingleInputOnnxRunner, typename SimpleLetterBoxConfig::SegmentParser>>;
+using yolov8OnnxSegmenter = Yolov8OnnxDPImpl<DPSegmentor< OnnxLoader, typename SimpleLetterBoxConfig::Normalizer, OnnxRunner, typename SimpleLetterBoxConfig::SegmentParser>>;
 
 //不建议使用opencv::dnn::net推理，建议使用onnxruntime推理
 using yolov8CVDNNCPUDetector= DPDetector< CVDnnLoaderCPU, typename SimpleLetterBoxConfig::Normalizer, CVDNNRunner, typename SimpleLetterBoxConfig::DetectParser>;

@@ -97,7 +97,7 @@ void OnnxLoader::setSessionOptions(Ort::SessionOptions& sessionOptions){
 	}
 }
 
-void OnnxLoader::load(const char* path, const char* cfg)
+void OnnxLoader::loadImpl(const char* path, const char* cfg)
 {
 	(void)cfg;
 
@@ -116,14 +116,16 @@ void OnnxLoader::load(const char* path, const char* cfg)
 }
 
 
-void OnnxLoader::getSize(cv::Vec4i& inputSize, std::vector<std::vector<int>>& outputSizes)
+void OnnxLoader::getSizeImpl(std::vector<std::vector<int>>& inputSize, std::vector<std::vector<int>>& outputSizes)
 {
 	//输入大小获取
-	auto inputShape=session.GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
-	inputSize[0] = inputShape.at(0);
-	inputSize[1] = inputShape.at(1);
-	inputSize[2] = inputShape.at(2);
-	inputSize[3] = inputShape.at(3);
+	int inputCount=session.GetInputCount();
+	inputSize.clear();
+	for (int i = 0; i < inputCount; ++i) {
+		auto shape=session.GetInputTypeInfo(i).GetTensorTypeAndShapeInfo().GetShape();
+		inputSize.push_back(std::vector<int>(shape.begin(), shape.end()));
+	}
+
 
 	//输出大小获取
 	int outputCount=session.GetOutputCount();
@@ -139,50 +141,76 @@ void OnnxLoader::getSize(cv::Vec4i& inputSize, std::vector<std::vector<int>>& ou
 
 
 
-std::vector<cv::Mat> SingleInputOnnxRunner::operator()(Ort::Session& session, cv::Mat blob)
+void OnnxRunner::initializeSessionParameters(Ort::Session& session)
 {
-	//默认内存分配器
-	Ort::AllocatorWithDefaultOptions allocator;
+	const OrtSession* sessionHandle = static_cast<OrtSession*>(session);
+	if (_sessionHandle == sessionHandle) {
+		return;
+	}
 
-	int inputCount = session.GetInputCount();
-	if (inputCount != 1) {
-		std::string errorMsg = "SingleInputOnnxRunner只接受单输入模型，但当前模型输入数量为: " + std::to_string(inputCount);
+	Ort::AllocatorWithDefaultOptions allocator;
+	const size_t inputCount = session.GetInputCount();
+	const size_t outputCount = session.GetOutputCount();
+
+	_inputNames.resize(inputCount);
+	_inputNameArr.resize(inputCount);
+	_inputShapes.resize(inputCount);
+	for (size_t i = 0; i < inputCount; ++i) {
+		_inputNames[i] = session.GetInputNameAllocated(i, allocator).get();
+		_inputNameArr[i] = _inputNames[i].c_str();
+		_inputShapes[i] = session.GetInputTypeInfo(i).GetTensorTypeAndShapeInfo().GetShape();
+	}
+
+	_outputNames.resize(outputCount);
+	_outputNameArr.resize(outputCount);
+	_outputSizes.resize(outputCount);
+	for (size_t i = 0; i < outputCount; ++i) {
+		_outputNames[i] = session.GetOutputNameAllocated(i, allocator).get();
+		_outputNameArr[i] = _outputNames[i].c_str();
+		auto shape = session.GetOutputTypeInfo(i).GetTensorTypeAndShapeInfo().GetShape();
+		_outputSizes[i] = std::vector<int>(shape.begin(), shape.end());
+	}
+
+	_sessionHandle = sessionHandle;
+}
+
+std::vector<cv::Mat> OnnxRunner::run(Ort::Session& session, std::vector<cv::Mat>& inputDatas)
+{
+	//获取输入、输出参数
+	initializeSessionParameters(session);
+
+	const size_t inputCount = _inputNames.size();
+	if (inputDatas.size() != inputCount) {
+		std::string errorMsg = "OnnxRunner: 输入张量数量 " + std::to_string(inputDatas.size()) +
+			" 与模型输入数量 " + std::to_string(inputCount) + " 不一致";
 		log_error(errorMsg);
 		throw std::runtime_error(errorMsg);
 	}
 
-	int outputCount = session.GetOutputCount();
+	const size_t outputCount = _outputNames.size();
 
-	// 输入信息
-	std::string inputName = session.GetInputNameAllocated(0, allocator).get();
-	auto inputShape = session.GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
-	int64 inputSize[4] = { inputShape.at(0), inputShape.at(1), inputShape.at(2), inputShape.at(3) };
-	int64 inputPixs = inputSize[1] * inputSize[2] * inputSize[3];
+	// 按模型输入形状，从对应 cv::Mat 构造 Ort::Value。
+	std::vector<Ort::Value> inputValues;
+	inputValues.reserve(inputCount);
 
-	// 输出信息
-	std::string outputName = session.GetOutputNameAllocated(0, allocator).get();
-
-	std::vector<std::string> outputNames(outputCount);
-	std::vector<std::vector<int>> outputSizes(outputCount);
-	for(int i=0; i<outputCount; ++i) {
-		outputNames[i] = session.GetOutputNameAllocated(i, allocator).get();
-		auto shape = session.GetOutputTypeInfo(i).GetTensorTypeAndShapeInfo().GetShape();
-		outputSizes[i] = std::vector<int>(shape.begin(), shape.end());
-	}
-
-	// 输入数据
 	auto memoryInfo = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
-	auto inputData = Ort::Value::CreateTensor<float>(memoryInfo, blob.ptr<float>(), inputPixs, inputSize, 4);
 
-	std::array<const char*, 1> inputNameArr = { inputName.c_str() };
-	std::vector<const char*> outputNameArr(outputCount);
-	for(int i=0; i<outputCount; ++i) {
-		outputNameArr[i] = outputNames[i].c_str();
+	for (size_t i = 0; i < inputCount; ++i) {
+		const auto& inputShape = _inputShapes[i];
+		// 元素总数
+		int64_t inputPixs = 1;
+		for (auto d : inputShape) {
+			inputPixs *= d;
+		}
+		inputValues.push_back(Ort::Value::CreateTensor<float>(
+			memoryInfo, inputDatas[i].ptr<float>(), inputPixs, inputShape.data(), inputShape.size()));
 	}
 
 	std::vector<Ort::Value> outputData;
 	try{
-		outputData = session.Run(Ort::RunOptions(nullptr), inputNameArr.data(), &inputData, 1, outputNameArr.data(), outputCount);
+		outputData = session.Run(Ort::RunOptions(nullptr),
+			_inputNameArr.data(), inputValues.data(), inputCount,
+			_outputNameArr.data(), outputCount);
 	}
 	catch (const std::exception& e) {
 		std::string errorMsg = "Onnx推理出错: " + std::string(e.what());
@@ -191,9 +219,8 @@ std::vector<cv::Mat> SingleInputOnnxRunner::operator()(Ort::Session& session, cv
 	}
 
 	std::vector<cv::Mat> res;
-	for(int i=0; i<outputCount; ++i) {
-		cv::Mat mat(outputSizes[i].size(), outputSizes[i].data(), CV_32F, outputData.at(i).GetTensorMutableData<float>());
-		// Copy out tensor data, because outputData will be released when this function returns.
+	for(size_t i=0; i<outputCount; ++i) {
+		cv::Mat mat(_outputSizes[i].size(), _outputSizes[i].data(), CV_32F, outputData.at(i).GetTensorMutableData<float>());
 		res.push_back(mat.clone());
 	}
 

@@ -1,5 +1,9 @@
 ﻿#include "dputility.h"
 
+cv::Size getImageInputSize(const std::vector<std::vector<int>>& inputSize, int index){
+	return cv::Size(inputSize[index][3], inputSize[index][2]);
+}
+
 cv::Rect rect(double cx, double cy, double w, double h) {
 	int ltx= static_cast<int>(std::round(cx - w / 2));
 	int lty= static_cast<int>(std::round(cy - h / 2));

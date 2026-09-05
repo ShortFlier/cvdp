@@ -26,14 +26,14 @@ set(SPDLOG_DIR "D:/gw/clib/spdlog/spdlog-1.15.1/include")
 include_directories(${SPDLOG_DIR})
 
 # onnxruntime c++ CPU
-set(ONNX_DLL_DIR "D:/gw/clib/onnxruntime-win-x64-gpu-1.24.1/lib")
-include_directories("D:\\gw\\clib\\onnxruntime-win-x64-gpu-1.24.1\\include")
-link_directories(${ONNX_DLL_DIR})
+# set(ONNX_DLL_DIR "D:/gw/clib/onnxruntime-win-x64-gpu-1.24.1/lib")
+# include_directories("D:\\gw\\clib\\onnxruntime-win-x64-gpu-1.24.1\\include")
+# link_directories(${ONNX_DLL_DIR})
 
 # # onnxruntime c++ GPU
-# set(ONNX_DLL_DIR "D:/gw/clib/onnxruntime-win-x64-gpu-1.18.0/lib")
-# include_directories("D:/gw/clib/onnxruntime-win-x64-gpu-1.18.0/include")
-# link_directories(${ONNX_DLL_DIR})
+set(ONNX_DLL_DIR "D:/gw/clib/onnxruntime-win-x64-gpu-1.18.0/lib")
+include_directories("D:/gw/clib/onnxruntime-win-x64-gpu-1.18.0/include")
+link_directories(${ONNX_DLL_DIR})
 
 project("dpdetect")
 set(CMAKE_CXX_STANDARD 20)
@@ -67,8 +67,8 @@ add_custom_command(TARGET dpdetect POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${ONNX_DLL_DIR}/onnxruntime_providers_shared.dll"
         "$<TARGET_FILE_DIR:dpdetect>/"
-    # COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    # "${ONNX_DLL_DIR}/onnxruntime_providers_cuda.dll"
-    # "$<TARGET_FILE_DIR:dpdetect>/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${ONNX_DLL_DIR}/onnxruntime_providers_cuda.dll"
+    "$<TARGET_FILE_DIR:dpdetect>/"
     COMMENT "Copying ONNX Runtime DLLs to output directory..."
 )

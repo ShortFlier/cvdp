@@ -6,70 +6,95 @@
 
 #include "onnx.h"
 
-#include "cvdnn.h"
 
 
 
 //yolov8检测模型结果解析
-template<typename LetterBoxT, int index>
-class Yolov8DetectLetterBoxResultParser:public ParserBase<Yolov8DetectLetterBoxResultParser<LetterBoxT, index>, DetectResArray>{
+template<typename _ParseImpl>
+class Yolov8DetectLetterBoxResultParser:public ParserBase<Yolov8DetectLetterBoxResultParser<_ParseImpl>, _ParseImpl, DetectResArray>{
 public:
 	Yolov8DetectLetterBoxResultParser(){}
 
-	DetectResArray parse(std::vector<cv::Mat>& outputs, cv::Size oriSize, const std::vector<std::vector<int>>& inputSize, const std::vector<std::vector<int>>& outputSizes,
-		int classNum,  const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs);
+	DetectResArray parse(const std::vector<Tensor>& outputs,
+						const _ParseImpl& letterboxParseImpl,
+						int classNum,
+		  				const std::vector<float>& socreThreshs,
+		   				const std::vector<float>& nmsThreshs);
 
-private:
-	LetterBoxT _letterBox;
 };
 
-
-template<typename LetterBoxT, int index>
-DetectResArray Yolov8DetectLetterBoxResultParser<LetterBoxT, index>::parse(std::vector<cv::Mat>& outputs, cv::Size oriSize, const std::vector<std::vector<int>>& _inputSize,
-	const std::vector<std::vector<int>>& outputSizes, int classNum, const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs)
+template<typename _ParseImpl>
+DetectResArray Yolov8DetectLetterBoxResultParser<_ParseImpl>::parse(const std::vector<Tensor>& outputs,
+																		const _ParseImpl& letterboxParseImpl,
+																		int classNum,
+																		const std::vector<float>& socreThreshs,
+																		const std::vector<float>& nmsThreshs)
 {
-	DetectResArray resArr(classNum);
-
-	//模型图片输入大小
-	cv::Size inputSize=getImageInputSize(_inputSize, index);
-
-	//只有一个输出
-	cv::Mat& outputMat = outputs.at(0);
-	const std::vector<int>& outputSize = outputSizes.at(0);
-
-	//yolov8输出格式[1，类别属性，预测数]
-	outputMat=outputMat.reshape(1, outputSize.at(0) * outputSize.at(1));
-
-	std::vector<std::vector<float>> scores(classNum);
-	std::vector<std::vector<cv::Rect>> boxs(classNum);
-	//矩形框格式为cx，cy，w，h
-	for (int c = 0; c < outputMat.cols; ++c) {
-		float cx = outputMat.at<float>(0, c);
-		float cy = outputMat.at<float>(1, c);
-		float w = outputMat.at<float>(2, c);
-		float h = outputMat.at<float>(3, c);
-
-		cv::Rect box = rect(cx, cy, w, h);
-
-		for (int i = 0; i < classNum; ++i) {
-			boxs[i].push_back(box);
-			scores[i].push_back(outputMat.at<float>(4 + i, c));
-		}
+	//只有一个输出张量
+	if(outputs.size() != 1) {
+		std::string errMsg = "Yolov8DetectLetterBoxResultParser接受输出张量数量应为1, 当前为" + std::to_string(outputs.size());
+		log_error(errMsg);
+		return DetectResArray();
 	}
 
-	for (int i = 0; i < classNum; ++i) {
-		std::vector<int> indexs;
-		cv::dnn::NMSBoxes(boxs[i], scores[i], socreThreshs.at(i), nmsThreshs.at(i), indexs);
+	auto& outputTensor=outputs[0];
 
-		for (int j = 0; j < indexs.size(); ++j) {
-			int index = indexs[j];
+	//获取batch
+	auto& batch = outputTensor.info.shape[0];
 
-			//对应原图矩形框大小
-			_letterBox.set(oriSize, inputSize, cv::Scalar(114, 114, 114));
-			cv::Rect box = _letterBox.enRect(boxs[i][index]);
+	DetectResArray resArr(batch);
 
-			resArr[i].push_back(DetectRes(box, scores[i][index]));
+	//解析每个batch
+	//yolov8输出格式[batch，类别属性，预测数]
+	auto& predInfo = outputTensor.info.shape[1];
+	auto& predNum = outputTensor.info.shape[2];
+
+	auto& tensor=outputTensor.tensor;
+	
+	//获取每个batch的预测结果
+	for (int b = 0; b < batch; ++b) {
+		std::vector<std::vector<float>> scores(classNum);
+		std::vector<std::vector<cv::Rect>> boxs(classNum);
+		std::vector<DetectRes> detRes(classNum);
+
+		//每个列为一个预测，包含(cx, cy, w, h, class1_score, class2_score, ...)
+		for(int p = 0; p < predNum; ++p) {
+			float cx = *tensor.ptr<float>(b, 0, p);
+			float cy = *tensor.ptr<float>(b, 1, p);
+			float w = *tensor.ptr<float>(b, 2, p);
+			float h = *tensor.ptr<float>(b, 3, p);
+
+			cv::Rect box = rect(cx, cy, w, h);
+
+			for (int i = 0; i < classNum; ++i) {
+				float score=*tensor.ptr<float>(b, 4 + i, p);
+				if(score >= socreThreshs[i]){
+					scores[i].push_back(score);
+					boxs[i].push_back(box);
+				}
+			}
 		}
+
+		//nms过滤获取值
+		for (int i = 0; i < classNum; ++i) {
+			std::vector<int> indexs;
+			cv::dnn::NMSBoxes(boxs[i], scores[i], socreThreshs[i], nmsThreshs[i], indexs);
+
+			DetectRes det;
+			for (int j = 0; j < indexs.size(); ++j) {
+				int index = indexs[j];
+
+				//对应原图矩形框大小
+				cv::Rect box = letterboxParseImpl[b].enRect(boxs[i][index]);
+
+				det.boxs.push_back(box);
+				det.scores.push_back(scores[i][index]);
+			}
+
+			detRes[i] = std::move(det);
+		}
+
+		resArr[b] = std::move(detRes);
 	}
 
 	return resArr;
@@ -81,151 +106,188 @@ DetectResArray Yolov8DetectLetterBoxResultParser<LetterBoxT, index>::parse(std::
 
 
 //yolov8分割模型结果解析
-template<typename LetterBoxT, int index>
-class Yolov8SegmentLetterBoxResultParser:public ParserBase<Yolov8SegmentLetterBoxResultParser<LetterBoxT, index>, SegmentResArray>{
+template<typename _ParseImpl>
+class Yolov8SegmentLetterBoxResultParser:public ParserBase<Yolov8SegmentLetterBoxResultParser<_ParseImpl>, _ParseImpl, SegmentResArray>{
 public:
 	Yolov8SegmentLetterBoxResultParser(){}
 
-	SegmentResArray parse(std::vector<cv::Mat>& outputs, cv::Size oriSize, const std::vector<std::vector<int>>& _inputSize, const std::vector<std::vector<int>>& outputSizes,
-		int classNum, const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs);
+	SegmentResArray parse(const std::vector<Tensor>& outputs,
+							const _ParseImpl& letterboxParseImpl,
+							int classNum,
+							const std::vector<float>& socreThreshs,
+							const std::vector<float>& nmsThreshs);
 
-private:
-	LetterBoxT _letterBox;
 };
 
 
-template<typename LetterBoxT, int index>
-SegmentResArray Yolov8SegmentLetterBoxResultParser<LetterBoxT, index>::parse(std::vector<cv::Mat>& outputs, cv::Size oriSize, const std::vector<std::vector<int>>& _inputSize,
-	 const std::vector<std::vector<int>>& outputSizes,	int classNum, const std::vector<float>& socreThreshs, const std::vector<float>& nmsThreshs)
+template<typename _ParseImpl>
+SegmentResArray Yolov8SegmentLetterBoxResultParser<_ParseImpl>::parse(const std::vector<Tensor>& outputs,
+							const _ParseImpl& letterboxParseImpl,
+							int classNum,
+							const std::vector<float>& socreThreshs,
+							const std::vector<float>& nmsThreshs)
 {
-	SegmentResArray resArr(classNum);
-
-	//模型图片输入大小
-	cv::Size inputSize=getImageInputSize(_inputSize, index);
-
-	/*
-	outputs应该有两个输出张量
-	一个是特征输出[1, 预测信息，预测数]，预测信息格式[cx, cy, w, h, class1_score, ..., ceof]
-	另一个是原型掩膜特征图[1,ceof, h, w]
-	*/
+	//2个输出张量
 	if(outputs.size() != 2) {
-		std::string errMsg = "Yolov8SegmentLetterBoxResultParser::operator() error: outputs size should be 2, but get " + std::to_string(outputs.size());
+		std::string errMsg = "Yolov8SegmentLetterBoxResultParser接受输出张量数量应为2, 当前为" + std::to_string(outputs.size());
 		log_error(errMsg);
-		throw std::runtime_error(errMsg);
+		return SegmentResArray();
 	}
 
-	/*
-		获取每个类别分数，进行NMS操作，初步筛选
-	*/	
-	std::vector<cv::Rect> outputBoxs;
-	std::vector<std::vector<float>> scores(classNum);
+	//检测与系数张量，形状为[batch, 预测信息, 预测数]
+	auto& output0=outputs[0];
+	//原型掩膜张量,形状为[N, ceof, H_proto, W_proto]
+	auto& protos=const_cast<Tensor&>(outputs[1]);
+	
+	//batch
+	auto& batch = output0.info.shape[0];
 
-	cv::Mat predMat=outputs[0].reshape(1, outputSizes[0][0] * outputSizes[0][1]);
-	//每一列向量是一个预测,[cx, cy, w, h, class1_score, ..., ceof]
-	for (int c = 0; c < predMat.cols; ++c) {
-		float cx = predMat.at<float>(0, c);
-		float cy = predMat.at<float>(1, c);
-		float w = predMat.at<float>(2, c);
-		float h = predMat.at<float>(3, c);
+	SegmentResArray resArr;
 
-		cv::Rect box = rect(cx, cy, w, h);
-		box = rectValidate(box, inputSize);
-		outputBoxs.push_back(box);
+	auto& preNum=output0.info.shape[2];
+	int preInfo = output0.info.shape[1];
 
-		for (int i = 0; i < classNum; ++i) {
-			scores[i].push_back(predMat.at<float>(4 + i, c));
-		}
-
-	}
-
-	//NMS操作
-	std::vector<std::vector<int>> classIndexs(classNum);
-	for (int i = 0; i < classNum; ++i) {
-		cv::dnn::NMSBoxes(outputBoxs, scores[i], socreThreshs.at(i), nmsThreshs.at(i), classIndexs[i]);
-	}
-
-	/*
-	根据NMS结果，获取对应的掩膜特征图，生成分割掩膜
-	*/
-	cv::Mat mask_protos=outputs[1];
 	//mask_protos信息
-	int seg_c=outputSizes[1][1];
-	int seg_h=outputSizes[1][2];
-	int seg_w=outputSizes[1][3];
+	int seg_c=protos.info.shape[1];
+	int seg_h=protos.info.shape[2];
+	int seg_w=protos.info.shape[3];
+	std::vector<int> protosShape{1, seg_c, seg_h, seg_w};
 
-	_letterBox.set(oriSize, inputSize, cv::Scalar(114, 114, 114));
-	cv::Vec4d params = _letterBox.params();
+	// 遍历每个 batch 的输出，进行解析
+	for(int b=0; b<batch; ++b) {
+		
+		auto& _letterBox=letterboxParseImpl[b];
+		auto& inputSize = _letterBox.targetSize();
+		//处理检测信息
+		std::vector<std::vector<cv::Rect>> outputBoxs(classNum);
+		std::vector<std::vector<float>> scores(classNum);
+		std::vector<std::vector<int>> predictionIndices(classNum);
 
-	for(int i=0; i<classNum; ++i) {
-		for(int j=0; j<classIndexs[i].size(); ++j) {
-			int index=classIndexs[i][j];
+		//初步筛选
+		//检测张量[batch, 预测信息, 预测数]
+		//每列为[center_x, center_y, width, height, class1_score, ..., classN_score, coef1, ..., coefM]
+		for(int p=0; p<preNum; ++p) {
+			float cx= *output0.tensor.ptr<float>(b, 0, p);
+			float cy= *output0.tensor.ptr<float>(b, 1, p);
+			float w= *output0.tensor.ptr<float>(b, 2, p);
+			float h= *output0.tensor.ptr<float>(b, 3, p);
 
-			/*
-				提取掩膜特征图对应区域，计算分割掩膜，减少计算量
-			*/
-			cv::Rect oriRect = _letterBox.enRect(outputBoxs[index]);
-			int net_width = inputSize.width;
-			int net_height = inputSize.height;
+			auto box=rectValidate(rect(cx, cy, w, h), inputSize);
 
-
-			//计算mask_protos对应的区域
-			int rang_x = static_cast<int>(std::floor((oriRect.x * params[0] + params[2]) / net_width * seg_w));
-			int rang_y = static_cast<int>(std::floor((oriRect.y * params[1] + params[3]) / net_height * seg_h));
-			int rang_w = static_cast<int>(std::ceil(((oriRect.x + oriRect.width) * params[0] + params[2]) / net_width * seg_w)) - rang_x;
-			int rang_h = static_cast<int>(std::ceil(((oriRect.y + oriRect.height) * params[1] + params[3]) / net_height * seg_h)) - rang_y;
-
-			rang_w = std::max(rang_w, 1);
-			rang_h = std::max(rang_h, 1);
-			if (rang_x + rang_w > seg_w) {
-				if (seg_w - rang_x > 0)
-					rang_w = seg_w - rang_x;
-				else
-					rang_x -= 1;
+			//保存box框及对应的分数
+			for(int i=0; i<classNum; ++i) {
+				float score= *output0.tensor.ptr<float>(b, 4+i, p);
+				if(score >= socreThreshs[i]) {
+					outputBoxs[i].push_back(box);
+					scores[i].push_back(score);
+					predictionIndices[i].push_back(p);
+				}
 			}
-			if (rang_y + rang_h > seg_h) {
-				if (seg_h - rang_y > 0)
-					rang_h = seg_h - rang_y;
-				else
-					rang_y -= 1;
-			}
-
-			std::vector<cv::Range> ranges;
-			ranges.push_back(cv::Range(0, 1));
-			ranges.push_back(cv::Range::all());
-			ranges.push_back(cv::Range(rang_y, rang_y + rang_h));
-			ranges.push_back(cv::Range(rang_x, rang_x + rang_w));
-
-
-			//提取对应区域的mask_protos，运算掩膜
-			cv::Mat temp_mask_protos = mask_protos(ranges).clone();
-			temp_mask_protos = temp_mask_protos.reshape(0, {seg_c, rang_w * rang_h});
-
-			cv::Mat ceof=predMat.col(index).rowRange(4 + classNum, predMat.rows).t();
-
-			cv::Mat mask_feature = ceof * temp_mask_protos;
-			mask_feature = mask_feature.reshape(0, rang_h);
-
-			cv::Mat dest;
-			cv::exp(-mask_feature, dest);
-			dest = 1.0 / (1.0 + dest);
-
-
-			//mask_protos区域映射到原图区域
-			int left = static_cast<int>(std::floor((net_width / static_cast<double>(seg_w) * rang_x - params[2]) / params[0]));
-			int top = static_cast<int>(std::floor((net_height / static_cast<double>(seg_h) * rang_y - params[3]) / params[1]));
-			int width = static_cast<int>(std::ceil(net_width / static_cast<double>(seg_w) * rang_w / params[0]));
-			int height = static_cast<int>(std::ceil(net_height / static_cast<double>(seg_h) * rang_h / params[1]));
-
-			cv::Mat maskPatch;
-			cv::resize(dest, maskPatch, cv::Size(width, height), 0, 0, cv::INTER_LINEAR);
-			cv::Mat finalMask = maskPatch(oriRect - cv::Point(left, top));
-
-			cv::Mat oriMask;
-			finalMask.convertTo(oriMask, CV_8UC1, 255);
-			resArr[i].push_back(SegmentRes(oriRect,  scores[i][index], oriMask));
-
 		}
+
+		//NMS操作
+		std::vector<std::vector<int>> classIndexs(classNum);
+		for (int i = 0; i < classNum; ++i) {
+			cv::dnn::NMSBoxes(outputBoxs[i], scores[i], socreThreshs.at(i), nmsThreshs.at(i), classIndexs[i]);
+		}
+
+
+		/*
+		根据NMS结果，获取对应的掩膜特征图，生成分割掩膜
+		*/
+
+		//分离该批次的原型掩膜
+		cv::Mat mask_protos(protosShape, CV_32F, protos.tensor.ptr<float>(b));
+
+		auto& params = _letterBox.params();
+
+		std::vector<SegmentRes> segmentResList(classNum);
+
+		for(int i=0; i<classNum; ++i) {
+			for(int j=0; j<classIndexs[i].size(); ++j) {
+				int index=classIndexs[i][j];
+				int predictionIndex = predictionIndices[i][index];
+
+				/*
+					提取掩膜特征图对应区域，计算分割掩膜，减少计算量
+				*/
+				cv::Rect oriRect = _letterBox.enRect(outputBoxs[i][index]);
+				int net_width = inputSize.width;
+				int net_height = inputSize.height;
+
+
+				//计算mask_protos对应的区域
+				int rang_x = static_cast<int>(std::floor((oriRect.x * params[0] + params[2]) / net_width * seg_w));
+				int rang_y = static_cast<int>(std::floor((oriRect.y * params[1] + params[3]) / net_height * seg_h));
+				int rang_w = static_cast<int>(std::ceil(((oriRect.x + oriRect.width) * params[0] + params[2]) / net_width * seg_w)) - rang_x;
+				int rang_h = static_cast<int>(std::ceil(((oriRect.y + oriRect.height) * params[1] + params[3]) / net_height * seg_h)) - rang_y;
+
+				rang_w = std::max(rang_w, 1);
+				rang_h = std::max(rang_h, 1);
+				if (rang_x + rang_w > seg_w) {
+					if (seg_w - rang_x > 0)
+						rang_w = seg_w - rang_x;
+					else
+						rang_x -= 1;
+				}
+				if (rang_y + rang_h > seg_h) {
+					if (seg_h - rang_y > 0)
+						rang_h = seg_h - rang_y;
+					else
+						rang_y -= 1;
+				}
+
+				std::vector<cv::Range> ranges;
+				ranges.push_back(cv::Range(0, 1));
+				ranges.push_back(cv::Range::all());
+				ranges.push_back(cv::Range(rang_y, rang_y + rang_h));
+				ranges.push_back(cv::Range(rang_x, rang_x + rang_w));
+
+				//提取对应区域的mask_protos，运算掩膜
+				cv::Mat temp_mask_protos = mask_protos(ranges).clone();
+				temp_mask_protos = temp_mask_protos.reshape(0, {seg_c, rang_w * rang_h});
+
+				// 提取当前检测框对应的掩膜系数
+				std::vector<cv::Range> ceofRanges;
+				ceofRanges.push_back(cv::Range(b, b+1));
+				ceofRanges.push_back(cv::Range(4+classNum, preInfo));
+				ceofRanges.push_back(cv::Range(predictionIndex, predictionIndex+1));
+				cv::Mat ceof=output0.tensor(ceofRanges).clone();
+
+				ceof=ceof.reshape(0, {1, preInfo - (4+classNum)});
+
+				cv::Mat mask_feature = ceof * temp_mask_protos;
+				mask_feature = mask_feature.reshape(0, rang_h);
+
+				cv::Mat dest;
+				cv::exp(-mask_feature, dest);
+				dest = 1.0 / (1.0 + dest);
+
+
+				//mask_protos区域映射到原图区域
+				int left = static_cast<int>(std::floor((net_width / static_cast<double>(seg_w) * rang_x - params[2]) / params[0]));
+				int top = static_cast<int>(std::floor((net_height / static_cast<double>(seg_h) * rang_y - params[3]) / params[1]));
+				int width = static_cast<int>(std::ceil(net_width / static_cast<double>(seg_w) * rang_w / params[0]));
+				int height = static_cast<int>(std::ceil(net_height / static_cast<double>(seg_h) * rang_h / params[1]));
+
+				cv::Mat maskPatch;
+				cv::resize(dest, maskPatch, cv::Size(width, height), 0, 0, cv::INTER_LINEAR);
+				cv::Mat finalMask = maskPatch(oriRect - cv::Point(left, top));
+
+				cv::Mat oriMask;
+				finalMask.convertTo(oriMask, CV_8UC1, 255);
+
+				segmentResList[i].scores.push_back(scores[i][index]);
+				segmentResList[i].masks.push_back(oriMask);
+				segmentResList[i].boxs.push_back(oriRect);
+
+			}
+		}
+
+		resArr.push_back(std::move(segmentResList));
+
 	}
+
 
 	return resArr;
 }
@@ -236,9 +298,9 @@ template<bool autoShape = false, bool scaleFill = false, bool scaleUp = false, i
 class LetterBoxConfig {
 public:
 	using Box = LetterBox<autoShape, scaleFill, scaleUp, stride>;
-	using Normalizer = LetterBoxNormalizer<Box, index>;
-	using DetectParser = Yolov8DetectLetterBoxResultParser<Box, index>;
-	using SegmentParser = Yolov8SegmentLetterBoxResultParser<Box, index>;
+	using Preprocessor = LetterBoxPreprocessor<Box, index>;
+	using DetectParser = Yolov8DetectLetterBoxResultParser<LetterBoxParseImpl<Box>>;
+	using SegmentParser = Yolov8SegmentLetterBoxResultParser<LetterBoxParseImpl<Box>>;
 };
 
 using SimpleLetterBoxConfig = LetterBoxConfig<false, false, false, 32, 0>;
@@ -304,11 +366,6 @@ public:
 
 };
 
-using yolov8OnnxDetector = Yolov8OnnxDPImpl<DPDetector< OnnxLoader, typename SimpleLetterBoxConfig::Normalizer, OnnxRunner, typename SimpleLetterBoxConfig::DetectParser>>;
+using yolov8OnnxDetector = Yolov8OnnxDPImpl<DPDetector< OnnxLoader, typename SimpleLetterBoxConfig::Preprocessor, OnnxRunner, typename SimpleLetterBoxConfig::DetectParser>>;
 
-using yolov8OnnxSegmenter = Yolov8OnnxDPImpl<DPSegmentor< OnnxLoader, typename SimpleLetterBoxConfig::Normalizer, OnnxRunner, typename SimpleLetterBoxConfig::SegmentParser>>;
-
-//不建议使用opencv::dnn::net推理，建议使用onnxruntime推理
-using yolov8CVDNNCPUDetector= DPDetector< CVDnnLoaderCPU, typename SimpleLetterBoxConfig::Normalizer, CVDNNRunner, typename SimpleLetterBoxConfig::DetectParser>;
-//不建议使用opencv::dnn::net推理，建议使用onnxruntime推理
-using yolov8CVDNNSCPUegmenter= DPSegmentor< CVDnnLoaderCPU, typename SimpleLetterBoxConfig::Normalizer, CVDNNRunner, typename SimpleLetterBoxConfig::SegmentParser>;
+using yolov8OnnxSegmenter = Yolov8OnnxDPImpl<DPSegmentor< OnnxLoader, typename SimpleLetterBoxConfig::Preprocessor, OnnxRunner, typename SimpleLetterBoxConfig::SegmentParser>>;

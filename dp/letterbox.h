@@ -27,8 +27,16 @@ public:
 		const cv::Scalar& color);
 
 	// [ratio_x, ratio_y, pad_x, pad_y]
-	cv::Vec4d params() const {
+	const cv::Vec4d& params() const {
 		return _params;
+	}
+
+	const cv::Size& targetSize() const {
+		return _targetSize;
+	}
+
+	const cv::Size& srcSize() const {
+		return _srcSize;
 	}
 
 	cv::Mat apply(const cv::Mat& srcMat) const;
@@ -106,49 +114,19 @@ inline void LetterBox<autoShape, scaleFill, scaleUp, stride>::set(cv::Size srcSi
 template<bool autoShape, bool scaleFill, bool scaleUp, int stride>
 inline cv::Mat LetterBox<autoShape, scaleFill, scaleUp, stride>::apply(const cv::Mat& srcMat) const
 {
-	if (scaleFill) {
-		// scaleFill 模式下直接缩放到目标尺寸。
-		cv::Mat dst;
-		cv::resize(srcMat, dst, _targetSize, 0, 0, cv::INTER_LINEAR);
-		return dst;
-	}
-
-	// 按保持宽高比的方式计算缩放比例。
-	float scale = std::min((float)_targetSize.height / (float)_srcSize.height,
-		(float)_targetSize.width / (float)_srcSize.width);
-	if (!scaleUp) {
-		// 只允许缩小。
-		scale = std::min(scale, 1.0f);
-	}
-
-	// 计算缩放后的实际像素尺寸。
-	int newW = static_cast<int>(std::round(_srcSize.width * scale));
-	int newH = static_cast<int>(std::round(_srcSize.height * scale));
-
-	// 目标尺寸减去缩放尺寸后得到需要补边的宽高。
-	int padW = _targetSize.width - newW;
-	int padH = _targetSize.height - newH;
-
-	if (autoShape) {
-		// 按 stride 对齐补边宽高。
-		padW = padW / stride * stride;
-		padH = padH / stride * stride;
-	}
-
-	// 将补边平均分配到左右、上下两侧。
-	int padLeft = padW / 2;
-	int padTop = padH / 2;
+	const int newW = static_cast<int>(std::round(_srcSize.width * _params[0]));
+	const int newH = static_cast<int>(std::round(_srcSize.height * _params[1]));
+	const int padLeft = static_cast<int>(_params[2]);
+	const int padTop = static_cast<int>(_params[3]);
 
 	cv::Mat resized;
-	if (_srcSize.width != newW || _srcSize.height != newH) {
-		// 先把原图缩放到中间尺寸。
+	if (srcMat.size() != cv::Size(newW, newH)) {
 		cv::resize(srcMat, resized, cv::Size(newW, newH), 0, 0, cv::INTER_LINEAR);
 	}
 	else {
 		resized = srcMat.clone();
 	}
 
-	// 再创建带填充色的目标画布，把缩放后的图像贴到指定区域。
 	cv::Mat dst(_targetSize.height, _targetSize.width, srcMat.type(), _color);
 	cv::Rect roi(padLeft, padTop, newW, newH);
 	resized.copyTo(dst(roi));
@@ -185,15 +163,20 @@ inline cv::Rect LetterBox<autoShape, scaleFill, scaleUp, stride>::enRect(const c
 /*
 	LetterBox预处理器
 	处理后返回指定大小，并且归一化到[0,1]的浮点图像。
+		LetterBoxT，实例化的LetterBox类
+		index，输入尺寸在 inputSize 中的索引。
 */
+template<typename LetterBoxT>
+using LetterBoxParseImpl=std::vector<LetterBoxT>;
+
 template<typename LetterBoxT, int index>
-class LetterBoxNormalizer: public NormalizerBase<LetterBoxNormalizer<LetterBoxT, index>>{
+class LetterBoxPreprocessor: public PreprocessBase<LetterBoxPreprocessor<LetterBoxT, index>, LetterBoxParseImpl<LetterBoxT>>{
 private:
 	float _scalefactor = 1.0f/255.0f;
 	cv::Scalar _fillColor = cv::Scalar(114, 114, 114);
 	bool _swapRB = true;
 
-	LetterBoxT _letterBox;
+	LetterBoxParseImpl<LetterBoxT> _letterBoxs;
 public:
 	void setScaleFactor(float scalefactor) {
 		_scalefactor = scalefactor;
@@ -207,18 +190,39 @@ public:
 		_swapRB = swapRB;
 	}
 
-	std::vector<cv::Mat> normalize(cv::Mat srcMat, const std::vector<std::vector<int>>& inputSize) {
+	std::vector<Tensor> preprocess(const std::vector<cv::Mat>& srcMats,
+		 							const std::vector<TensorInfo>& inputSize,
+									LetterBoxParseImpl<LetterBoxT>& letterBoxs) {
+
+		//获取模型图片输入尺寸								
 		cv::Size targetSize=getImageInputSize(inputSize, index);
 		
+		
+		Tensor tensor;
+		tensor.info=inputSize[index];
+		
+		//创建对应LetterBox实例
+		_letterBoxs.resize(srcMats.size());
+
 		//使用LetterBox缩放指定尺寸
-		_letterBox.set(srcMat.size(), targetSize, _fillColor);
-		cv::Mat mat = _letterBox.apply(srcMat);
+		std::vector<cv::Mat> letterBoxMats;
+		for(int i=0; i<srcMats.size(); i++){
+			LetterBoxT& _letterBox = _letterBoxs[i];
+			const cv::Mat& srcMat = srcMats[i];
+			_letterBox.set(srcMat.size(), targetSize, _fillColor);
+			cv::Mat mat = _letterBox.apply(srcMat);
 
-		cv::Mat blob=cv::dnn::blobFromImage(mat, _scalefactor, cv::Size(), cv::Scalar(), _swapRB, false);
+			letterBoxMats.push_back(mat);
+		}
 
-		return std::vector<cv::Mat>{blob};
+		letterBoxs=_letterBoxs;
+
+		//转为张量
+		tensor.tensor=cv::dnn::blobFromImages(letterBoxMats, _scalefactor, cv::Size(), cv::Scalar(), _swapRB, false);
+		tensor.info.shape={tensor.tensor.size[0], tensor.tensor.size[1], tensor.tensor.size[2], tensor.tensor.size[3]};			
+
+		return std::vector<Tensor>{tensor};
 	}
 
 
 };
-

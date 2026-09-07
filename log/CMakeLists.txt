@@ -7,3 +7,4 @@ add_library(log STATIC
 )
 
 target_include_directories(log PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(log PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)

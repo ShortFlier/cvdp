@@ -46,6 +46,7 @@ add_executable(dpdetect
     demo.cpp
 )
 
+
 target_include_directories(dpdetect PRIVATE
     ${CMAKE_SOURCE_DIR}/dp
     ${CMAKE_SOURCE_DIR}/log
@@ -57,6 +58,7 @@ target_link_libraries(dpdetect PRIVATE
     onnxruntime.lib
     onnxruntime_providers_shared.lib
 )
+
 
 
 # 拷贝dll到exe文件目录

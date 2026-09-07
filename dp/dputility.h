@@ -2,6 +2,7 @@
 
 #include <opencv2/opencv.hpp>
 #include <thread>
+#include "dp.h"
 
 // 获取当前CPU线程数
 inline int getCPUConcurrency() {
@@ -10,7 +11,8 @@ inline int getCPUConcurrency() {
 
 
 //从模型输入张量获取输入图片大小
-cv::Size getImageInputSize(const std::vector<std::vector<int>>& inputSize, int index);
+//index<0，自动搜索第一个4维的输入张量
+cv::Size getImageInputSize(const std::vector<TensorInfo>& inputTensorInfos, int index=-1);
 
 
 

@@ -74,7 +74,7 @@ public:
 	void loadImpl(const char* path, const char* cfg = nullptr);
 
 	//返回输入、输出张量大小
-	void getSizeImpl(std::vector<std::vector<int>>& inputSize, std::vector<std::vector<int>>& outputSizes);
+	void getSizeImpl(std::vector<TensorInfo>& inputSize, std::vector<TensorInfo>& outputSizes);
 
 private:
 	// Env must outlive Session, so declare Env before Session.
@@ -106,16 +106,6 @@ class OnnxRunner:public RunnerBase<OnnxRunner, Ort::Session>{
 public:
 	OnnxRunner() {}
 
-	std::vector<cv::Mat> run(Ort::Session& session, std::vector<cv::Mat>& input);
-	
-private:
-	void initializeSessionParameters(Ort::Session& session);
+	std::vector<Tensor> run(Ort::Session& session, const std::vector<Tensor>& input);
 
-	const OrtSession* _sessionHandle = nullptr;
-	std::vector<std::string> _inputNames;
-	std::vector<const char*> _inputNameArr;
-	std::vector<std::vector<int64_t>> _inputShapes;
-	std::vector<std::string> _outputNames;
-	std::vector<const char*> _outputNameArr;
-	std::vector<std::vector<int>> _outputSizes;
 };

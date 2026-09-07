@@ -6,9 +6,8 @@
 #include <iomanip>
 #include <sstream>
 
-namespace fs = std::filesystem;
 
-void logInit(Log_Level level, const std::string& filePath) {
+void logInit(Log_Level level) {
     spdlog::set_level(level);
 
     auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();

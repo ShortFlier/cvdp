@@ -6,7 +6,9 @@
 
 using Log_Level = spdlog::level::level_enum;
 
-void logInit(Log_Level level, const std::string& filePath = std::string());
+void logInit(Log_Level level);
+
+#define log_debug(...) SPDLOG_DEBUG(__VA_ARGS__)
 
 #define log_info(...) SPDLOG_INFO(__VA_ARGS__)
 

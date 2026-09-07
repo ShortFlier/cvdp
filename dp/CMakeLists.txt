@@ -7,7 +7,6 @@ add_library(dp STATIC
     dputility.h     dputility.cpp
     yolov8.h
     onnx.h  onnx.cpp
-    cvdnn.h
 )
 
 target_include_directories(dp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

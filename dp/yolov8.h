@@ -294,16 +294,16 @@ SegmentResArray Yolov8SegmentLetterBoxResultParser<_ParseImpl>::parse(const std:
 
 
 
-template<bool autoShape = false, bool scaleFill = false, bool scaleUp = false, int stride = 32, int index=0>
+template<bool keepScaleRatio = true, bool scaleUp = false, bool autoShape = false, int stride = 32, bool centerAnchor = true, int index=0>
 class LetterBoxConfig {
 public:
-	using Box = LetterBox<autoShape, scaleFill, scaleUp, stride>;
+	using Box = LetterBox<keepScaleRatio, scaleUp, autoShape, stride, centerAnchor>;
 	using Preprocessor = LetterBoxPreprocessor<Box, index>;
 	using DetectParser = Yolov8DetectLetterBoxResultParser<LetterBoxParseImpl<Box>>;
 	using SegmentParser = Yolov8SegmentLetterBoxResultParser<LetterBoxParseImpl<Box>>;
 };
 
-using SimpleLetterBoxConfig = LetterBoxConfig<false, false, false, 32, 0>;
+using SimpleLetterBoxConfig = LetterBoxConfig<true, false, false, 32, true, 0>;
 
 template<typename Yolov8OnnxDP>
 class Yolov8OnnxDPImpl:public Yolov8OnnxDP{

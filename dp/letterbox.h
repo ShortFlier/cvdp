@@ -5,17 +5,21 @@
 #include "dp.h"
 
 /*
-	@srcMat 输入图像
-	@targetSize 目标尺寸
-	@autoShape =true将 dw/dh 向下对齐到 stride 的整数倍，保证模型下采样时尺寸整除
-	@scaleFill =true直接拉伸图像到目标尺寸，不保留宽高比
-	@scaleUp =false只缩小不放大
-	@stride 对齐值
-	@color 填充颜色
+	@Template Parameters
+		@keepScaleRatio，是否保持宽高比
+		@scaleUp =false只缩小不放大
+		@autoShape =true，将基于targetSize计算尺寸， 新尺寸的宽高(new_w/new_h) 向下对齐到 stride 的整数倍
+		@stride 对齐值，通常为网络下采样倍数的整数倍
+		@centerAnchor true，图像居中对齐；false，图像左上角对齐
+
+	@Constructor
+		@srcMat 输入图像
+		@targetSize 目标尺寸
+		@color 填充颜色
 
 	LetterBox 使用非类型模板参数绑定预处理配置，确保预处理与结果解析使用相同的参数。
 */
-template<bool autoShape = false, bool scaleFill = false, bool scaleUp = false, int stride = 32>
+template<bool keepScaleRatio = true, bool scaleUp = false, bool autoShape = false, int stride = 32, bool centerAnchor = true>
 class LetterBox {
 public:
 	LetterBox() = default;
@@ -48,61 +52,75 @@ private:
 	cv::Size _srcSize;
 	cv::Size _targetSize;
 	cv::Scalar _color;
-	cv::Vec4d _params; // [ratio_x, ratio_y, pad_x, pad_y]
+	/*
+		[ratio_x, ratio_y, pad_x, pad_y]
+		ratio_x: 水平方向缩放比例
+		ratio_y: 垂直方向缩放比例
+		pad_x: 水平方向补边像素数
+		pad_y: 垂直方向补边像素数
+	*/
+	cv::Vec4d _params;
 };
 
-template<bool autoShape, bool scaleFill, bool scaleUp, int stride>
-inline LetterBox<autoShape, scaleFill, scaleUp, stride>::LetterBox(cv::Size srcSize, cv::Size targetSize,
+template<bool keepScaleRatio, bool scaleUp, bool autoShape, int stride, bool centerAnchor>
+inline LetterBox<keepScaleRatio, scaleUp, autoShape, stride, centerAnchor>::LetterBox(cv::Size srcSize, cv::Size targetSize,
 	const cv::Scalar& color)
 {
 	set(srcSize, targetSize, color);
 }
 
-template<bool autoShape, bool scaleFill, bool scaleUp, int stride>
-inline void LetterBox<autoShape, scaleFill, scaleUp, stride>::set(cv::Size srcSize, cv::Size targetSize,
+template<bool keepScaleRatio, bool scaleUp, bool autoShape, int stride, bool centerAnchor>
+inline void LetterBox<keepScaleRatio, scaleUp, autoShape, stride, centerAnchor>::set(cv::Size srcSize, cv::Size targetSize,
 	const cv::Scalar& color)
 {
 	_srcSize = srcSize;
 	_targetSize = targetSize;
 	_color = color;
 
-	// 先按输入图像和目标图像的最小缩放比例计算统一缩放系数，保证完整显示。
-	float r = std::min((float)_targetSize.height / (float)_srcSize.height,
-		(float)_targetSize.width / (float)_srcSize.width);
+	if (autoShape) {
+		// 目标尺寸向下对齐到 stride 的整数倍。
+		_targetSize.width -= _targetSize.width % stride;
+		_targetSize.height -= _targetSize.height % stride;
+	}
+
+	float ratio[2] = {
+		static_cast<float>(_targetSize.width) / static_cast<float>(_srcSize.width),
+		static_cast<float>(_targetSize.height) / static_cast<float>(_srcSize.height)
+	};
+	if (keepScaleRatio) {
+		// 统一缩放比例，保证原图完整显示。
+		const float ratioValue = std::min(ratio[0], ratio[1]);
+		ratio[0] = ratioValue;
+		ratio[1] = ratioValue;
+	}
 	if (!scaleUp) {
 		// 只缩小不放大，避免小图被强行拉大带来失真。
-		r = std::min(r, 1.0f);
+		ratio[0] = std::min(ratio[0], 1.0f);
+		ratio[1] = std::min(ratio[1], 1.0f);
 	}
 
 	// 记录缩放后的宽高，后续据此计算需要补边的像素数。
-	float ratio[2] = { r, r };
 	int new_un_pad[2] = {
-		static_cast<int>(std::round((float)_srcSize.width * r)),
-		static_cast<int>(std::round((float)_srcSize.height * r))
+		static_cast<int>(std::round((float)_srcSize.width * ratio[0])),
+		static_cast<int>(std::round((float)_srcSize.height * ratio[1]))
 	};
 
 	// 目标尺寸与缩放后尺寸的差值就是需要填充的空白区域。
-	auto dw = static_cast<float>(_targetSize.width - new_un_pad[0]);
-	auto dh = static_cast<float>(_targetSize.height - new_un_pad[1]);
+	int dw = _targetSize.width - new_un_pad[0];
+	int dh = _targetSize.height - new_un_pad[1];
 
-	if (autoShape) {
-		// 按 stride 对齐补边，确保网络下采样时尺寸可整除。
-		dw = static_cast<float>(static_cast<int>(dw) % stride);
-		dh = static_cast<float>(static_cast<int>(dh) % stride);
-	}
-	else if (scaleFill) {
-		// 直接拉伸到目标尺寸，不保留原始宽高比。
-		dw = 0.0f;
-		dh = 0.0f;
-		new_un_pad[0] = _targetSize.width;
-		new_un_pad[1] = _targetSize.height;
-		ratio[0] = static_cast<float>(_targetSize.width) / (float)_srcSize.width;
-		ratio[1] = static_cast<float>(_targetSize.height) / (float)_srcSize.height;
+	if (autoShape && keepScaleRatio) {
+		// 只保留 stride 对齐所需的补边，并将最终输出尺寸同步为实际尺寸。
+		dw %= stride;
+		dh %= stride;
+		_targetSize = cv::Size(new_un_pad[0] + dw, new_un_pad[1] + dh);
 	}
 
-	// 左右、上下各分一半，保证补边居中。
-	dw /= 2.0f;
-	dh /= 2.0f;
+	if (centerAnchor) {
+		// 左右、上下各分一半，保证补边居中。
+		dw /= 2;
+		dh /= 2;
+	}
 
 	// 保存缩放比例和左上角补边量，供结果坐标反算使用。
 	int top = static_cast<int>(std::round(dh - 0.1f));
@@ -111,8 +129,8 @@ inline void LetterBox<autoShape, scaleFill, scaleUp, stride>::set(cv::Size srcSi
 	_params = cv::Vec4d(ratio[0], ratio[1], left, top);
 }
 
-template<bool autoShape, bool scaleFill, bool scaleUp, int stride>
-inline cv::Mat LetterBox<autoShape, scaleFill, scaleUp, stride>::apply(const cv::Mat& srcMat) const
+template<bool keepScaleRatio, bool scaleUp, bool autoShape, int stride, bool centerAnchor>
+inline cv::Mat LetterBox<keepScaleRatio, scaleUp, autoShape, stride, centerAnchor>::apply(const cv::Mat& srcMat) const
 {
 	const int newW = static_cast<int>(std::round(_srcSize.width * _params[0]));
 	const int newH = static_cast<int>(std::round(_srcSize.height * _params[1]));
@@ -124,7 +142,7 @@ inline cv::Mat LetterBox<autoShape, scaleFill, scaleUp, stride>::apply(const cv:
 		cv::resize(srcMat, resized, cv::Size(newW, newH), 0, 0, cv::INTER_LINEAR);
 	}
 	else {
-		resized = srcMat.clone();
+		resized = srcMat;
 	}
 
 	cv::Mat dst(_targetSize.height, _targetSize.width, srcMat.type(), _color);
@@ -134,8 +152,8 @@ inline cv::Mat LetterBox<autoShape, scaleFill, scaleUp, stride>::apply(const cv:
 	return dst;
 }
 
-template<bool autoShape, bool scaleFill, bool scaleUp, int stride>
-inline cv::Rect LetterBox<autoShape, scaleFill, scaleUp, stride>::enRect(const cv::Rect& rect) const
+template<bool keepScaleRatio, bool scaleUp, bool autoShape, int stride, bool centerAnchor>
+inline cv::Rect LetterBox<keepScaleRatio, scaleUp, autoShape, stride, centerAnchor>::enRect(const cv::Rect& rect) const
 {
 	// 将检测框从 letterbox 后的坐标系反算回原图坐标系。
 	int ltx = static_cast<int>(std::floor((rect.x - _params[2]) / _params[0]));

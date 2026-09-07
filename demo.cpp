@@ -96,15 +96,15 @@ void elapsedTime(Dp& dp, const std::vector<cv::Mat>& imgs, int iterations) {
 	log_info("Elapsed time: max = {} ms, min = {} ms, avg = {} ms", max, min, avg);
 }
 
-// const char* imgPath="test/wtest.png";
-const char* imgPath="test/test.jpg";
+const char* imgPath="test/wtest.png";
+// const char* imgPath="test/test.jpg";
 
-const char* detectModelPath="model/detect.onnx";
-const int detectClassNum=1;
+// const char* detectModelPath="model/detect.onnx";
+// const int detectClassNum=1;
 
-// const char* detectModelPath="model/wdetect4cls.onnx";
+const char* detectModelPath="model/wdetect4cls.onnx";
 // const char* detectModelPath="model/wpyoloe.onnx";
-// const int detectClassNum=4;
+const int detectClassNum=4;
 
 const char* segmentModelPath="model/segment.onnx";
 const int segmentClassNum=2;
@@ -126,6 +126,7 @@ void testDetectorCPU() {
 
 	showDetectRes(std::vector<cv::Mat>({img}), resArr);
 
+	//elapsedTime(detector, std::vector<cv::Mat>({img}), 10);
 }
 
 void testSegmenterCPU() {
@@ -141,6 +142,8 @@ void testSegmenterCPU() {
 	auto resArr = segmenter.run(std::vector<cv::Mat>({img}));
 
 	showSegmentRes(std::vector<cv::Mat>({img}), resArr);
+
+	
 }
 
 void testDetectorCUDA() {
@@ -204,7 +207,7 @@ int main()
 	logInit(Log_Level::debug);
 
 	testDetectorCPU();
-	testSegmenterCPU();
+	//testSegmenterCPU();
 	//testDetectorCUDA();
 	//testSegmenterCUDA();
 	//testSegmenterOpenVINO();

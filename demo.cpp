@@ -20,6 +20,7 @@ cv::Scalar_<uchar> randomColor(int seed) {
 /// 绘制检测结果
 void showDetectRes(const std::vector<cv::Mat>& img, const DetectResArray& resArr) {
 
+	log_info("detect result batch: {0}", resArr.size());
 	for(int i=0; i<img.size(); ++i){
 		std::string windowName = "det_batch_" + std::to_string(i);
 		
@@ -103,7 +104,6 @@ const char* imgPath="test/wtest.png";
 // const int detectClassNum=1;
 
 const char* detectModelPath="model/wdetect4cls.onnx";
-// const char* detectModelPath="model/wpyoloe.onnx";
 const int detectClassNum=4;
 
 const char* segmentModelPath="model/segment.onnx";
@@ -116,7 +116,7 @@ void testDetectorCPU() {
 
 	yolov8OnnxDetector detector(detectClassNum, std::vector<float>({ 0.25f }), std::vector<float>({ 0.45f }));
 	//设置为使用CPU推理
-	detector.setDeviceType(OnnxLoader::DeviceType::CPU);
+	detector._modelLoader.setDeviceType(OnnxLoader::DeviceType::CPU);
 	//detector.setCPUParams(2, 0);
 
 	detector.loadModel(modelPath);

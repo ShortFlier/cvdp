@@ -213,7 +213,8 @@ public:
 									LetterBoxParseImpl<LetterBoxT>& letterBoxs) {
 
 		//获取模型图片输入尺寸								
-		cv::Size targetSize=getImageInputSize(inputSize, index);
+		cv::Size targetSize;
+		getImageInputSize(inputSize, targetSize, index);
 		
 		
 		Tensor tensor;

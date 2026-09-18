@@ -173,14 +173,14 @@ public:
 	@_Result结果数组类型，DetectResArray或SegmentResArray
 */
 template<typename _ModelLoader,
-	typename _Preprocess,
+	typename _Preprocessor,
 	typename _Runner,
 	typename _Parser,
 	typename _Result>
 class _DPBase {
 	public:
 		_ModelLoader _modelLoader;
-		_Preprocess _preprocess;
+		_Preprocessor _preprocessor;
 		_Runner _runner;
 		_Parser _parser;
 
@@ -207,9 +207,6 @@ class _DPBase {
 				setClassNum(classNum);
 				setScoreThreshs(threshs);
 				setNmsThreshs(nmsThreshs);
-
-			log_info("DP推理参数classNum: {0}, threshs: {1}, nmsThreshs: {2}",
-				 _classNum, fmt::join(_threshs, ", "), fmt::join(_nmsThreshs, ", "));
 		}
 
 		void setClassNum(int classNum) {
@@ -253,6 +250,10 @@ class _DPBase {
 			for (size_t i = 0; i < _outputTensorInfos.size(); ++i) {
 				log_info("输出{0}，{1}: [{2}]", i, _outputTensorInfos[i].name, fmt::join(_outputTensorInfos[i].shape, ","));
 			}
+
+			
+			log_info("DP推理参数classNum: {0}, scoreThreshs: {1}, nmsThreshs: {2}",
+				 _classNum, fmt::join(_threshs, ", "), fmt::join(_nmsThreshs, ", "));
 		}
 
 		//推理，获取结果
@@ -263,8 +264,8 @@ class _DPBase {
 
 				//图像预处理
 				log_info("执行图像预处理");
-				typename _Preprocess::ParseImplType parseImpl;
-				std::vector<Tensor> inputDatas = _preprocess(srcMats, _inputTensorInfos, parseImpl);
+				typename _Preprocessor::ParseImplType parseImpl;
+				std::vector<Tensor> inputDatas = _preprocessor(srcMats, _inputTensorInfos, parseImpl);
 
 				log_debug("图像预处理完成，输入张量数量: {0}", inputDatas.size());
 				for (size_t i = 0; i < inputDatas.size(); ++i) {
@@ -291,13 +292,13 @@ class _DPBase {
 };
 
 template<typename _ModelLoader,
-	typename _Preprocess,
+	typename _Preprocessor,
 	typename _Runner,
 	typename _Parser>
-using DPDetector = _DPBase<_ModelLoader, _Preprocess, _Runner, _Parser, DetectResArray>;
+using DPDetector = _DPBase<_ModelLoader, _Preprocessor, _Runner, _Parser, DetectResArray>;
 
 template<typename _ModelLoader,
-	typename _Preprocess,
+	typename _Preprocessor,
 	typename _Runner,
 	typename _Parser>
-using DPSegmentor = _DPBase<_ModelLoader, _Preprocess, _Runner, _Parser, SegmentResArray>;
+using DPSegmentor = _DPBase<_ModelLoader, _Preprocessor, _Runner, _Parser, SegmentResArray>;

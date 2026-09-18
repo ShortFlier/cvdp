@@ -1,16 +1,22 @@
 ﻿#include "dputility.h"
 
-cv::Size getImageInputSize(const std::vector<TensorInfo>& inputTensorInfos, int index){
-	if(index>=0)
-		return cv::Size(inputTensorInfos[index].shape[3], inputTensorInfos[index].shape[2]);
+int getImageInputSize(const std::vector<TensorInfo>& inputTensorInfos, cv::Size& inputSize, int index){
+	if(index>=0){
+		inputSize.width = inputTensorInfos[index].shape[3];
+		inputSize.height = inputTensorInfos[index].shape[2];
+		return index;
+	}
 
 	// 自动搜索第一个4维的输入张量
 	for(size_t i=0;i<inputTensorInfos.size();i++){
-		if(inputTensorInfos[i].shape.size()==4)
-			return cv::Size(inputTensorInfos[i].shape[3], inputTensorInfos[i].shape[2]);
+		if(inputTensorInfos[i].shape.size()==4){
+			inputSize.width = inputTensorInfos[i].shape[3];
+			inputSize.height = inputTensorInfos[i].shape[2];
+			return i;
+		}
 	}
 	
-	return cv::Size();
+	return -1;
 }
 
 cv::Rect rect(double cx, double cy, double w, double h) {

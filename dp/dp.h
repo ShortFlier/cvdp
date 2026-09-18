@@ -99,12 +99,14 @@ public:
 		operator()，函数preprocess，图像预处理，预备输入数据，转为张量输入集
 		@src 输入图像数组
 		@inputTensorInfos 模型输入张量信息
+		@dynamicInputSize 为动态输入模型指定图片大小 
 		@parseImpl 输出，结果解析辅助接口
 	*/
 	std::vector<Tensor> operator()( const std::vector<cv::Mat>& src,
 									const std::vector<TensorInfo>& inputTensorInfos,
+									const cv::Size& dynamicInputSize,
 									ParseImplType& parseImpl ){
-		return static_cast<_Preprocess*>(this)->preprocess(src, inputTensorInfos, parseImpl);
+		return static_cast<_Preprocess*>(this)->preprocess(src, inputTensorInfos, dynamicInputSize, parseImpl);
 	}
 
 };
@@ -196,7 +198,8 @@ class _DPBase {
 		//NMS阈值
 		std::vector<float> _nmsThreshs;
 
-		
+		//动态输入指定大小
+		cv::Size _dynamicInputSize;
 
 	public:
 
@@ -211,6 +214,8 @@ class _DPBase {
 
 		void setClassNum(int classNum) {
 			_classNum = classNum;
+
+			log_info("DP类别数：{0}", _classNum);
 		}
 
 		void setScoreThreshs(const std::vector<float>& threshs) {
@@ -220,6 +225,8 @@ class _DPBase {
 			for (int i = 0; i < needThresh; ++i) {
 				_threshs.push_back(0.5);
 			}
+
+			log_debug("DP分数阈值：{0}", fmt::join(_threshs, ", "));
 		}
 
 		void setNmsThreshs(const std::vector<float>& nmsThreshs) {
@@ -229,10 +236,20 @@ class _DPBase {
 			for (int i = 0; i < needNms; ++i) {
 				_nmsThreshs.push_back(0.4f);
 			}
+
+			log_debug("DP NMS阈值：{0}", fmt::join(_nmsThreshs, ", "));
+		}
+
+		//为动态输入指定输入大小
+		void setDynamicInputSize(const cv::Size& size){
+			_dynamicInputSize=size;
+
+			log_info("指定动态输入宽高：( {0} , {1} )", _dynamicInputSize.width, _dynamicInputSize.height);
 		}
 
 		//加载模型
 		void loadModel(const char* path, const char* cfg=nullptr) {
+
 			log_info("DP加载模型: {0}", path);
 
 			_modelLoader.load(path, cfg);
@@ -250,10 +267,6 @@ class _DPBase {
 			for (size_t i = 0; i < _outputTensorInfos.size(); ++i) {
 				log_info("输出{0}，{1}: [{2}]", i, _outputTensorInfos[i].name, fmt::join(_outputTensorInfos[i].shape, ","));
 			}
-
-			
-			log_info("DP推理参数classNum: {0}, scoreThreshs: {1}, nmsThreshs: {2}",
-				 _classNum, fmt::join(_threshs, ", "), fmt::join(_nmsThreshs, ", "));
 		}
 
 		//推理，获取结果
@@ -265,7 +278,7 @@ class _DPBase {
 				//图像预处理
 				log_info("执行图像预处理");
 				typename _Preprocessor::ParseImplType parseImpl;
-				std::vector<Tensor> inputDatas = _preprocessor(srcMats, _inputTensorInfos, parseImpl);
+				std::vector<Tensor> inputDatas = _preprocessor(srcMats, _inputTensorInfos, _dynamicInputSize, parseImpl);
 
 				log_debug("图像预处理完成，输入张量数量: {0}", inputDatas.size());
 				for (size_t i = 0; i < inputDatas.size(); ++i) {

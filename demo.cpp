@@ -97,8 +97,8 @@ void elapsedTime(Dp& dp, const std::vector<cv::Mat>& imgs, int iterations) {
 	log_info("Elapsed time: max = {} ms, min = {} ms, avg = {} ms", max, min, avg);
 }
 
-const char* imgPath="test/wtest.png";
-// const char* imgPath="test/test.jpg";
+//const char* imgPath="test/wtest.png";
+const char* imgPath="test/test.jpg";
 
 // const char* detectModelPath="model/detect.onnx";
 // const int detectClassNum=1;
@@ -107,6 +107,7 @@ const char* detectModelPath="model/wdetect4cls.onnx";
 const int detectClassNum=4;
 
 const char* segmentModelPath="model/segment.onnx";
+//const char* segmentModelPath="model/dynseg.onnx";
 const int segmentClassNum=2;
 
 
@@ -134,6 +135,9 @@ void testSegmenterCPU() {
 	yolov8OnnxSegmenter segmenter(segmentClassNum);
 	//设置为使用CPU推理
 	segmenter.setDeviceType(OnnxLoader::DeviceType::CPU);
+
+	segmenter.setDynamicInputSize(cv::Size(640, 640)); 
+
 	//segmenter.setCPUParams(2,0);
 
 	segmenter.loadModel(modelPath);
@@ -200,17 +204,95 @@ void testSegmenterOpenVINO() {
 
 }
 
+//对比单输入与动态输入运行速度
+void compareDynAndSta(){
+	const char* imgDir="test/imgs";
+
+	const char* dynModel="model/dynseg.onnx";
+	const char* staModel="model/segment.onnx";
+
+	const int classNum = 2;
+	const int warmupRuns = 1;
+	const int measureRuns = 5;
+
+	//获取所有图片
+	std::vector<cv::Mat> imgs;
+	std::vector<cv::String> imagePaths;
+	cv::glob(std::string(imgDir) + "/*", imagePaths, false);
+	for (const auto& imagePath : imagePaths) {
+		cv::Mat image = cv::imread(imagePath, cv::IMREAD_COLOR);
+		if (image.empty()) {
+			log_warn("无法读取图片，跳过：{}", imagePath);
+			continue;
+		}
+		imgs.push_back(std::move(image));
+	}
+
+	if (imgs.empty()) {
+		log_error("目录中没有可用于对比的图片：{}", imgDir);
+		return;
+	}
+
+	//初始化模型
+	yolov8OnnxSegmenter staticSegmenter(classNum);
+	yolov8OnnxSegmenter dynamicSegmenter(classNum);
+	dynamicSegmenter.setDynamicInputSize(cv::Size(640, 640));
+	staticSegmenter.loadModel(staModel);
+	dynamicSegmenter.loadModel(dynModel);
+
+	//预热，避免把首次运行的初始化开销计入结果
+	for (int i = 0; i < warmupRuns; ++i) {
+		for (const auto& image : imgs) {
+			staticSegmenter.run(std::vector<cv::Mat>{image});
+		}
+		dynamicSegmenter.run(imgs);
+	}
+
+	const auto measure = [&imgs, measureRuns](auto& segmenter, bool batchInput) {
+		const auto start = std::chrono::steady_clock::now();
+		for (int run = 0; run < measureRuns; ++run) {
+			if (batchInput) {
+				segmenter.run(imgs);
+			} else {
+				for (const auto& image : imgs) {
+					segmenter.run(std::vector<cv::Mat>{image});
+				}
+			}
+		}
+		const auto end = std::chrono::steady_clock::now();
+		return std::chrono::duration<double, std::milli>(end - start).count();
+	};
+
+	const double staticElapsedMs = measure(staticSegmenter, false);
+	const double dynamicElapsedMs = measure(dynamicSegmenter, true);
+	const double staticAverageMs = staticElapsedMs / measureRuns;
+	const double dynamicAverageMs = dynamicElapsedMs / measureRuns;
+
+	//打印时间对比
+	log_info("图片数量：{}，测量次数：{}", imgs.size(), measureRuns);
+	log_info("静态模型单张输入：总耗时 {:.3f} ms，平均每批 {:.3f} ms",
+		staticElapsedMs, staticAverageMs);
+	log_info("动态模型批量输入：总耗时 {:.3f} ms，平均每批 {:.3f} ms",
+		dynamicElapsedMs, dynamicAverageMs);
+	if (dynamicElapsedMs > 0.0) {
+		log_info("动态批量相对静态逐张加速：{:.2f}x",
+			staticElapsedMs / dynamicElapsedMs);
+	}
+}
+
 int main()
 {
 	SetConsoleOutputCP(CP_UTF8);
 
 	logInit(Log_Level::debug);
 
-	testDetectorCPU();
+	//testDetectorCPU();
 	//testSegmenterCPU();
 	//testDetectorCUDA();
 	//testSegmenterCUDA();
 	//testSegmenterOpenVINO();
+
+	compareDynAndSta();
 
 	cv::waitKey();
 

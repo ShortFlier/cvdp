@@ -210,11 +210,16 @@ public:
 
 	std::vector<Tensor> preprocess(const std::vector<cv::Mat>& srcMats,
 		 							const std::vector<TensorInfo>& inputSize,
+									const cv::Size& dynamicInputSize,
 									LetterBoxParseImpl<LetterBoxT>& letterBoxs) {
 
-		//获取模型图片输入尺寸								
+		//获取模型图片输入尺寸
+		//如果为动态尺寸，使用 dynamicInputSize 作为目标尺寸。								
 		cv::Size targetSize;
 		getImageInputSize(inputSize, targetSize, index);
+		if(targetSize.width <= 0 || targetSize.height <= 0){
+			targetSize = dynamicInputSize;
+		}
 		
 		
 		Tensor tensor;

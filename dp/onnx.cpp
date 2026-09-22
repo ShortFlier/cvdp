@@ -149,9 +149,10 @@ std::vector<Tensor> OnnxRunner::run(Ort::Session& session, const std::vector<Ten
 	Ort::AllocatorWithDefaultOptions allocator;
 
 	auto inputCount = inputDatas.size();
-	if ( session.GetInputCount() != inputCount) {
-		std::string errorMsg = "OnnxRunner: 输入张量数量 " + std::to_string(inputDatas.size()) +
-			" 与模型输入数量 " + std::to_string(inputCount) + " 不一致";
+	auto modelInputCount= session.GetInputCount();
+	if ( modelInputCount != inputCount) {
+		std::string errorMsg = "OnnxRunner: 输入张量数量 " + std::to_string(inputCount) +
+			" 与模型输入数量 " + std::to_string(modelInputCount) + " 不一致";
 		log_error(errorMsg);
 		return std::vector<Tensor>();
 	}

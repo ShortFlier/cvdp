@@ -100,11 +100,12 @@ void elapsedTime(Dp& dp, const std::vector<cv::Mat>& imgs, int iterations) {
 //const char* imgPath="test/wtest.png";
 const char* imgPath="test/test.jpg";
 
-// const char* detectModelPath="model/detect.onnx";
-// const int detectClassNum=1;
+const char* detectModelPath="model/detect.onnx";
+const int detectClassNum=1;
 
-const char* detectModelPath="model/wdetect4cls.onnx";
-const int detectClassNum=4;
+//const char* detectModelPath="model/wdetect4cls.onnx";
+// const char* detectModelPath="model/wdetect4cls1c.onnx";
+// const int detectClassNum=4;
 
 const char* segmentModelPath="model/segment.onnx";
 //const char* segmentModelPath="model/dynseg.onnx";
@@ -122,7 +123,7 @@ void testDetectorCPU() {
 
 	detector.loadModel(modelPath);
 	
-	cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
+	cv::Mat img = cv::imread(imgPath, cv::IMREAD_GRAYSCALE);
 	auto resArr = detector.run(std::vector<cv::Mat>({img}));
 
 	showDetectRes(std::vector<cv::Mat>({img}), resArr);

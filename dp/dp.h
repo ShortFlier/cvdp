@@ -7,13 +7,13 @@
 
 #include <chrono>
 
-#define ELAPSED(str, exe)                                                     \
+#define ELAPSED(str, exe, log_fun)                                                     \
     do {                                                                      \
         auto __start = std::chrono::high_resolution_clock::now();             \
         exe;                                                                   \
         auto __end = std::chrono::high_resolution_clock::now();               \
         auto __duration = std::chrono::duration_cast<std::chrono::microseconds>(__end - __start).count(); \
-        log_info("{0}耗时：{1}ms", str, __duration / 1000.0); \
+        log_fun("{0}耗时：{1}ms", str, __duration / 1000.0); \
     } while(0)
 
 
@@ -273,7 +273,7 @@ class _DPBase {
 		_Result run(const std::vector<cv::Mat>& srcMats) {
 			_Result res;
 
-			ELAPSED("总推理",
+			ELAPSED("DP总推理",
 
 				//图像预处理
 				log_info("执行图像预处理");
@@ -288,7 +288,7 @@ class _DPBase {
 				//运行
 				log_info("执行模型推理");
 				std::vector<Tensor> resTensor;
-				ELAPSED("模型推理", resTensor = _runner(_modelLoader.get(), inputDatas));
+				ELAPSED("DP模型推理", resTensor = _runner(_modelLoader.get(), inputDatas), log_debug);
 
 				log_debug("模型推理完成，输出张量数量: {0}", resTensor.size());
 				for (size_t i = 0; i < resTensor.size(); ++i) {
@@ -296,9 +296,9 @@ class _DPBase {
 				}
 
 				//解析结果
-				log_info("解析结果");
-				ELAPSED("结果解析", res = _parser(resTensor, parseImpl, _classNum, _threshs, _nmsThreshs));
-			);
+				log_info("DP解析结果");
+				ELAPSED("结果解析", res = _parser(resTensor, parseImpl, _classNum, _threshs, _nmsThreshs), log_debug);
+			, log_info);
 
 			return res;
 		}

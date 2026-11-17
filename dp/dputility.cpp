@@ -1,6 +1,6 @@
 ﻿#include "dputility.h"
 
-int getImageInputSize(const std::vector<TensorInfo>& inputTensorInfos, cv::Size& inputSize, int index){
+int getImageInputSize(const std::vector<dp::TensorInfo>& inputTensorInfos, cv::Size& inputSize, int index){
 	if(index>=0){
 		inputSize.width = inputTensorInfos[index].shape[3];
 		inputSize.height = inputTensorInfos[index].shape[2];

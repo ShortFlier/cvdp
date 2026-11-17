@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <numeric>
 
+using namespace dp;
+
 cv::Scalar_<uchar> randomColor(int seed) {
     // 使用 classId 作为种子，同类颜色一致
     // std::mt19937 rng(seed * 1000);  // 乘以一个常数让相邻 classId 颜色差异更大
@@ -116,14 +118,15 @@ const int segmentClassNum=2;
 void testDetectorCPU() {
 	const char* modelPath = detectModelPath;
 
-	yolov8OnnxDetector detector(detectClassNum, std::vector<float>({ 0.25f }), std::vector<float>({ 0.45f }));
+	yolov8OnnxDetector detector(detectClassNum, std::vector<float>({ 0.25f }));
+	detector.setNMSThreshs(std::vector<float>(detectClassNum, 0.4));
 	//设置为使用CPU推理
 	detector._modelLoader.setDeviceType(OnnxLoader::DeviceType::CPU);
 	//detector.setCPUParams(2, 0);
 
 	detector.loadModel(modelPath);
 	
-	cv::Mat img = cv::imread(imgPath, cv::IMREAD_GRAYSCALE);
+	cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
 	auto resArr = detector.run(std::vector<cv::Mat>({img}));
 
 	showDetectRes(std::vector<cv::Mat>({img}), resArr);
@@ -134,6 +137,7 @@ void testDetectorCPU() {
 void testSegmenterCPU() {
 	const char* modelPath = segmentModelPath;
 	yolov8OnnxSegmenter segmenter(segmentClassNum);
+	segmenter.setNMSThreshs(std::vector<float>(segmentClassNum, 0.4));
 	//设置为使用CPU推理
 	segmenter.setDeviceType(OnnxLoader::DeviceType::CPU);
 
@@ -155,7 +159,8 @@ void testDetectorCUDA() {
 	
 	const char* modelPath = detectModelPath;
 
-	yolov8OnnxDetector detector(detectClassNum, std::vector<float>({ 0.25f }), std::vector<float>({ 0.45f }));
+	yolov8OnnxDetector detector(detectClassNum, std::vector<float>({ 0.25f }));
+	detector.setNMSThreshs(std::vector<float>(detectClassNum, 0.4));
 	detector.loadModel(modelPath);
 		cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
 
@@ -169,8 +174,9 @@ void testDetectorCUDA() {
 void testSegmenterCUDA() {
 	
 	const char* modelPath = segmentModelPath;
-	yolov8OnnxSegmenter segmenter(segmentClassNum, std::vector<float>({ 0.5f, 0.5f }), std::vector<float>({ 0.5f, 0.5f }));
-
+	yolov8OnnxSegmenter segmenter(segmentClassNum, std::vector<float>({ 0.5f, 0.5f }));
+	
+	segmenter.setNMSThreshs(std::vector<float>(segmentClassNum, 0.4));
 
 	segmenter.loadModel(modelPath);
 	cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
@@ -188,7 +194,9 @@ void testSegmenterCUDA() {
 void testSegmenterOpenVINO() {
 	
 	const char* modelPath = segmentModelPath;
-	yolov8OnnxSegmenter segmenter(segmentClassNum, std::vector<float>({ 0.5f, 0.5f }), std::vector<float>({ 0.5f, 0.5f }));
+	yolov8OnnxSegmenter segmenter(segmentClassNum, std::vector<float>({ 0.5f, 0.5f }));
+	
+	segmenter.setNMSThreshs(std::vector<float>(segmentClassNum, 0.4));
 	segmenter.setDeviceType(OnnxLoader::DeviceType::OpenVINO_CPU);
 	segmenter.setOpenVINOCPUParams(0, 1);
 
@@ -237,7 +245,12 @@ void compareDynAndSta(){
 	//初始化模型
 	yolov8OnnxSegmenter staticSegmenter(classNum);
 	yolov8OnnxSegmenter dynamicSegmenter(classNum);
+
+	staticSegmenter.setNMSThreshs(std::vector<float>(classNum, 0.4));
+	dynamicSegmenter.setNMSThreshs(std::vector<float>(classNum, 0.4));
+
 	dynamicSegmenter.setDynamicInputSize(cv::Size(640, 640));
+
 	staticSegmenter.loadModel(staModel);
 	dynamicSegmenter.loadModel(dynModel);
 
@@ -293,7 +306,7 @@ int main()
 	//testSegmenterCUDA();
 	//testSegmenterOpenVINO();
 
-	compareDynAndSta();
+	//compareDynAndSta();
 
 	cv::waitKey();
 

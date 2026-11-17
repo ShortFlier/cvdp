@@ -13,7 +13,7 @@ inline int getCPUConcurrency() {
 //从模型输入张量获取输入图片大小
 //index<0，自动搜索第一个4维的输入张量
 //返回值，第一个4维的输入张量在inputTensorInfos中的索引，-1表示未找到
-int getImageInputSize(const std::vector<TensorInfo>& inputTensorInfos, cv::Size& inputSize, int index=-1);
+int getImageInputSize(const std::vector<dp::TensorInfo>& inputTensorInfos, cv::Size& inputSize, int index=-1);
 
 
 

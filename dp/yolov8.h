@@ -7,7 +7,7 @@
 #include "onnx.h"
 
 
-
+NAMESPACE_DP_BEGIN
 
 //yolov8检测模型结果解析
 template<typename _ParseImpl>
@@ -18,17 +18,16 @@ public:
 	DetectResArray parse(const std::vector<Tensor>& outputs,
 						const _ParseImpl& letterboxParseImpl,
 						int classNum,
-		  				const std::vector<float>& socreThreshs,
-		   				const std::vector<float>& nmsThreshs);
-
+		  				const std::vector<float>& socreThreshs);
+	
+	std::vector<float> nmsThreshs;
 };
 
 template<typename _ParseImpl>
 DetectResArray Yolov8DetectLetterBoxResultParser<_ParseImpl>::parse(const std::vector<Tensor>& outputs,
 																		const _ParseImpl& letterboxParseImpl,
 																		int classNum,
-																		const std::vector<float>& socreThreshs,
-																		const std::vector<float>& nmsThreshs)
+																		const std::vector<float>& socreThreshs)
 {
 	//只有一个输出张量
 	if(outputs.size() != 1) {
@@ -114,9 +113,10 @@ public:
 	SegmentResArray parse(const std::vector<Tensor>& outputs,
 							const _ParseImpl& letterboxParseImpl,
 							int classNum,
-							const std::vector<float>& socreThreshs,
-							const std::vector<float>& nmsThreshs);
+							const std::vector<float>& socreThreshs);
 
+
+	std::vector<float> nmsThreshs;
 };
 
 
@@ -124,8 +124,7 @@ template<typename _ParseImpl>
 SegmentResArray Yolov8SegmentLetterBoxResultParser<_ParseImpl>::parse(const std::vector<Tensor>& outputs,
 							const _ParseImpl& letterboxParseImpl,
 							int classNum,
-							const std::vector<float>& socreThreshs,
-							const std::vector<float>& nmsThreshs)
+							const std::vector<float>& socreThreshs)
 {
 	//2个输出张量
 	if(outputs.size() != 2) {
@@ -364,8 +363,16 @@ public:
 		this->_normalizer.setSwapRB(swapRB);
 	}
 
+	//设置nms阈值
+	void setNMSThreshs(const std::vector<float>& nmsThreshs){
+		this->_parser.nmsThreshs=nmsThreshs;
+	}
+
 };
 
 using yolov8OnnxDetector = Yolov8OnnxDPImpl<DPDetector< OnnxLoader, typename SimpleLetterBoxConfig::Preprocessor, OnnxRunner, typename SimpleLetterBoxConfig::DetectParser>>;
 
 using yolov8OnnxSegmenter = Yolov8OnnxDPImpl<DPSegmentor< OnnxLoader, typename SimpleLetterBoxConfig::Preprocessor, OnnxRunner, typename SimpleLetterBoxConfig::SegmentParser>>;
+
+
+NAMESPACE_DP_END

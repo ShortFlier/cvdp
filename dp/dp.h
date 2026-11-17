@@ -17,6 +17,10 @@
     } while(0)
 
 
+#define NAMESPACE_DP_BEGIN namespace dp{
+#define NAMESPACE_DP_END };
+
+NAMESPACE_DP_BEGIN
 /*
 	检测结果结构体，包含该类别的所有检测框和分数
 	boxs：检测框坐标数组
@@ -58,6 +62,22 @@ struct Tensor{
 	cv::Mat tensor;
 };
 
+
+
+//禁止拷贝复制
+class nocopy{
+public:
+	nocopy()=default;
+	~nocopy()=default;
+
+	nocopy(const nocopy&) = delete;
+    nocopy& operator=(const nocopy&) = delete;
+
+    nocopy(nocopy&&) = delete;
+    nocopy& operator=(nocopy&&) = delete;
+};
+
+
 /*
 	深度学习模型加载类
 		load,函数loadImpl，加载模型
@@ -66,7 +86,10 @@ struct Tensor{
 */
 
 template<typename _ModelLoader, typename _Model>
-class ModelLoaderBase{
+class ModelLoaderBase:nocopy{
+private:
+	ModelLoaderBase()=default;
+	friend _ModelLoader;
 public:
 	void load(const char* path, const char* cfg = nullptr){
 		static_cast<_ModelLoader*>(this)->loadImpl(path, cfg);
@@ -90,7 +113,10 @@ public:
 	@operator(),函数preprocess，图像预处理，预备输入数据，转为张量输入集
 */
 template<typename _Preprocess, typename _ParseImpl>
-class PreprocessBase{
+class PreprocessBase:nocopy{
+private:
+	PreprocessBase()=default;
+	friend _Preprocess;
 public:
 
 	using ParseImplType=_ParseImpl;
@@ -117,7 +143,10 @@ public:
 		operator()，函数run，使用模型进行推理，返回结果张量
 */
 template<typename _Runner, typename _Model>
-class RunnerBase{
+class RunnerBase:nocopy{
+private:
+	RunnerBase()=default;
+	friend _Runner;
 public:
 	//使用模型进行推理，返回结果张量
 	std::vector<Tensor> operator()(_Model& model, const std::vector<Tensor>& inputTensors){
@@ -133,7 +162,10 @@ public:
 
 */
 template<typename _Parser, typename _ParseImpl, typename _Result>
-class ParserBase{
+class ParserBase:nocopy{
+private:
+	ParserBase()=default;
+	friend _Parser;
 public:
 	/*
 		operator()，函数parse，解析模型输出的结果张量，返回结果数组
@@ -141,17 +173,17 @@ public:
 		@parseImpl 结果解析辅助接口，在结果解析恢复box框大小等时候使用
 		@classNum 类别数
 		@socreThreshs 分数阈值
-		@nmsThreshs NMS阈值
 	*/
 	typename _Result operator()(const std::vector<Tensor>& outputs,
 								const _ParseImpl& parseImpl,
 								int classNum,
-								const std::vector<float>& socreThreshs, 
-								const std::vector<float>& nmsThreshs){
-		return static_cast<_Parser*>(this)->parse(outputs, parseImpl, classNum, socreThreshs, nmsThreshs);
+								const std::vector<float>& socreThreshs){
+		return static_cast<_Parser*>(this)->parse(outputs, parseImpl, classNum, socreThreshs);
 	}
 
 };
+
+#define DP_DEFAULT_SCORE_THRESHOLD 0.5
 
 /*
 	深度学习检测模型功能类
@@ -179,7 +211,7 @@ template<typename _ModelLoader,
 	typename _Runner,
 	typename _Parser,
 	typename _Result>
-class _DPBase {
+class _DPBase:nocopy{
 	public:
 		_ModelLoader _modelLoader;
 		_Preprocessor _preprocessor;
@@ -194,22 +226,18 @@ class _DPBase {
 		//类别数
 		int _classNum;
 		//分数阈值
-		std::vector<float> _threshs;
-		//NMS阈值
-		std::vector<float> _nmsThreshs;
+		std::vector<float> _scoreThreshs;
 
 		//动态输入指定大小
 		cv::Size _dynamicInputSize;
 
 	public:
 
-		//传入的分数阈值或NMS阈值为空，分别设置为默认的0.5、0.4
-		//传入的分数阈值或NMS阈值数量不足classNum，使用默认值补全
-		_DPBase(int classNum, const std::vector<float>& threshs = std::vector<float>(),
-			const std::vector<float>& nmsThreshs = std::vector<float>()){
+		//传入的分数阈值为空，设置为默认的DP_DEFAULT_SCORE_THRESHOLD
+		//传入的分数阈值数量不足classNum，使用默认值补全
+		_DPBase(int classNum, const std::vector<float>& threshs = std::vector<float>()){
 				setClassNum(classNum);
 				setScoreThreshs(threshs);
-				setNmsThreshs(nmsThreshs);
 		}
 
 		void setClassNum(int classNum) {
@@ -219,25 +247,14 @@ class _DPBase {
 		}
 
 		void setScoreThreshs(const std::vector<float>& threshs) {
-			_threshs.clear();
-			_threshs = threshs;
-			int needThresh = _classNum - static_cast<int>(_threshs.size());
+			_scoreThreshs.clear();
+			_scoreThreshs = threshs;
+			int needThresh = _classNum - static_cast<int>(_scoreThreshs.size());
 			for (int i = 0; i < needThresh; ++i) {
-				_threshs.push_back(0.5);
+				_scoreThreshs.push_back(DP_DEFAULT_SCORE_THRESHOLD);
 			}
 
-			log_debug("DP分数阈值：{0}", fmt::join(_threshs, ", "));
-		}
-
-		void setNmsThreshs(const std::vector<float>& nmsThreshs) {
-			_nmsThreshs.clear();
-			_nmsThreshs = nmsThreshs;
-			int needNms = _classNum - static_cast<int>(_nmsThreshs.size());
-			for (int i = 0; i < needNms; ++i) {
-				_nmsThreshs.push_back(0.4f);
-			}
-
-			log_debug("DP NMS阈值：{0}", fmt::join(_nmsThreshs, ", "));
+			log_debug("DP分数阈值：{0}", fmt::join(_scoreThreshs, ", "));
 		}
 
 		//为动态输入指定输入大小
@@ -297,7 +314,7 @@ class _DPBase {
 
 				//解析结果
 				log_info("DP解析结果");
-				ELAPSED("结果解析", res = _parser(resTensor, parseImpl, _classNum, _threshs, _nmsThreshs), log_debug);
+				ELAPSED("结果解析", res = _parser(resTensor, parseImpl, _classNum, _scoreThreshs), log_debug);
 			, log_info);
 
 			return res;
@@ -315,3 +332,5 @@ template<typename _ModelLoader,
 	typename _Runner,
 	typename _Parser>
 using DPSegmentor = _DPBase<_ModelLoader, _Preprocessor, _Runner, _Parser, SegmentResArray>;
+
+NAMESPACE_DP_END

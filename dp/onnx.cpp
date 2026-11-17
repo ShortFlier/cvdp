@@ -2,6 +2,7 @@
 
 #include "log.h"
 
+NAMESPACE_DP_BEGIN
 
 namespace detail {
 
@@ -215,3 +216,6 @@ std::vector<Tensor> OnnxRunner::run(Ort::Session& session, const std::vector<Ten
 
 	return outputTensors;
 }
+
+
+NAMESPACE_DP_END

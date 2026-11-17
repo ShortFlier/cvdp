@@ -4,6 +4,9 @@
 
 #include "dp.h"
 
+
+NAMESPACE_DP_BEGIN
+
 /*
 	@Template Parameters
 		@keepScaleRatio，是否保持宽高比
@@ -250,3 +253,6 @@ public:
 
 
 };
+
+
+NAMESPACE_DP_END

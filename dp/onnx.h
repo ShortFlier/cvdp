@@ -10,6 +10,10 @@
 
 #include "dp.h"
 
+
+
+NAMESPACE_DP_BEGIN
+
 /*
 * onnxruntime的模型加载
 * _deviceType: 使用推理设备，没有可以设备时，使用CPU推理
@@ -109,3 +113,6 @@ public:
 	std::vector<Tensor> run(Ort::Session& session, const std::vector<Tensor>& input);
 
 };
+
+
+NAMESPACE_DP_END

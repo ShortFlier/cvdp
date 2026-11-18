@@ -1,5 +1,7 @@
 ﻿#include "dputility.h"
 
+NAMESPACE_DP_BEGIN
+
 int getImageInputSize(const std::vector<dp::TensorInfo>& inputTensorInfos, cv::Size& inputSize, int index){
 	if(index>=0){
 		inputSize.width = inputTensorInfos[index].shape[3];
@@ -56,3 +58,5 @@ cv::Rect rectValidate(const cv::Rect& box, const cv::Size& size){
 	return validBox & imgRect; // 取交集，确保在图片范围内
 }
 
+
+NAMESPACE_DP_END

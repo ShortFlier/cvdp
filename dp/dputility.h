@@ -4,6 +4,9 @@
 #include <thread>
 #include "dp.h"
 
+
+NAMESPACE_DP_BEGIN
+
 // 获取当前CPU线程数
 inline int getCPUConcurrency() {
 	return std::thread::hardware_concurrency();
@@ -38,3 +41,5 @@ inline cv::Rect oriRect(cv::Size oriSize, cv::Size inputSize, float cx, float cy
 	return scaleRect(rect(cx, cy, w, h), inputSize, oriSize);
 }
 
+
+NAMESPACE_DP_END

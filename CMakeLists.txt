@@ -59,7 +59,7 @@ target_link_libraries(dpdetect PRIVATE
     onnxruntime_providers_shared.lib
 )
 
-
+target_compile_definitions(dpdetect PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
 
 # 拷贝dll到exe文件目录
 add_custom_command(TARGET dpdetect POST_BUILD

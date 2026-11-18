@@ -229,7 +229,7 @@ class _DPBase:nocopy{
 		std::vector<float> _scoreThreshs;
 
 		//动态输入指定大小
-		cv::Size _dynamicInputSize;
+		cv::Size _dynamicInputSize=cv::Size(0,0);
 
 	public:
 

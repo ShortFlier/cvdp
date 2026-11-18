@@ -72,8 +72,10 @@ flowchart LR
 
 ### 4.3 YOLOv8 解析
 
-- 检测解析器要求一个输出张量，形状约定为 `[batch, 4 + classNum, predictionCount]`。每个预测包含中心点、宽高及各类别分数；解析器按类别阈值筛选，分别执行 NMS，然后将框映射回原图。
-- 分割解析器要求两个输出张量：检测与掩膜系数张量，以及原型掩膜张量。对候选框执行 NMS 后，使用对应预测的掩膜系数与原型特征计算掩膜，并映射到原图中的框区域。
+- `Yolov8OutputDecoder` 将 YOLOv8 检测输出解码为按类别组织的轻量候选，保留原始预测索引。解码前会根据预测信息维度和掩膜系数数量校验模型类别数；与传入 `classNum` 不一致时记录错误并停止解析。`NmsPolicy` 和 `NmmPolicy` 在 `policy.h` 中实现结果输出策略。
+- 检测解析器要求一个输出张量，形状约定为 `[batch, 4 + classNum, predictionCount]`。解码后按类别应用输出策略，再将框映射回原图。
+- 分割解析器要求两个输出张量：检测与掩膜系数张量，以及原型掩膜张量。输出策略先筛选候选；之后只为最终候选组的成员预测计算掩膜。NMM 合并多个预测时，`OrMatPolicy` 接收每个原型分辨率掩膜及其位置框，构造能容纳全部位置框的联合框，并将掩膜直接逐像素 OR 到联合框内；不做阈值筛选，之后一次性映射到原图。
+- 默认 `SimpleLetterBoxConfig` 使用 OpenCV 硬 NMS。`SimpleNmmLetterBoxConfig` 使用 NMM：按分数降序选择种子，将与种子 IoU 大于阈值的候选归组，框坐标按分数加权平均，输出分数取组内最高分。可通过 `yolov8OnnxNmmDetector` 和 `yolov8OnnxNmmSegmenter` 使用 NMM；两类策略的 IoU 阈值通过 `setIouThreshold` 按类别配置，未设置项默认为 `DP_DEFAULT_IOU_THRESHOLD` (`0.4f`)。
 - 这两种解析器依赖上述 YOLOv8 输出布局和浮点数据。输出数量或布局不符合约定时，应使用匹配的解析器或实现新的 Parser。
 
 ## 5. 使用示例

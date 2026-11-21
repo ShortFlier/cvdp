@@ -314,7 +314,7 @@ void test(){
 	std::vector<Tensor> inputDatas = segmenter._preprocessor({mat}, segmenter._inputTensorInfos, size, parseImpl);
 	auto __end = std::chrono::high_resolution_clock::now();
 	auto __duration = std::chrono::duration_cast<std::chrono::microseconds>(__end - __start).count();
-    log_info("耗时：{0}ms", __duration / 1000.0); 
+    log_info("单独预处理耗时：{0}ms", __duration / 1000.0); 
 
 	segmenter.run({mat});
 }

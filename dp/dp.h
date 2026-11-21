@@ -31,9 +31,6 @@ struct DetectRes
 	std::vector<cv::Rect> boxs;
 	std::vector<float> scores;
 };
-// 检测结果数组，外层vector表示图像批次，内层vector表示类别检测结果
-typedef std::vector<std::vector<DetectRes>> DetectResArray;
-
 /*
 	分割结果结构体，包含该类别的所有检测框、分数和掩膜
 	boxs：检测框坐标数组
@@ -46,8 +43,46 @@ struct SegmentRes {
 	std::vector<cv::Mat> masks;//Mask为box区域的掩膜
 
 };
-// 分割结果数组，外层vector表示图像批次，内层vector表示类别分割结果
-typedef std::vector<std::vector<SegmentRes>> SegmentResArray;
+template<typename Result>
+class ResultBatch : public std::vector<Result> {
+public:
+	using std::vector<Result>::vector;
+
+	Result& classAt(int classIndex) {
+		return this->at(classIndex);
+	}
+
+	const Result& classAt(int classIndex) const {
+		return this->at(classIndex);
+	}
+};
+
+template<typename Result>
+class ResultArray : public std::vector<ResultBatch<Result>> {
+public:
+	using Batch = ResultBatch<Result>;
+	using std::vector<Batch>::vector;
+
+	Batch& batchAt(int batchIndex) {
+		return this->at(batchIndex);
+	}
+
+	const Batch& batchAt(int batchIndex) const {
+		return this->at(batchIndex);
+	}
+
+	Result& batchClassAt(int batchIndex, int classIndex) {
+		return batchAt(batchIndex).classAt(classIndex);
+	}
+
+	const Result& batchClassAt(int batchIndex, int classIndex) const {
+		return batchAt(batchIndex).classAt(classIndex);
+	}
+};
+
+// 结果按图像批次、类别组织
+using DetectResArray = ResultArray<DetectRes>;
+using SegmentResArray = ResultArray<SegmentRes>;
 
 
 //张量名称、形状信息

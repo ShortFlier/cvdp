@@ -28,13 +28,14 @@ void showDetectRes(const std::vector<cv::Mat>& img, const DetectResArray& resArr
 		
 		cv::Mat resImg = img[i].clone();
 
-		auto& res = resArr[i];
+		auto& res = resArr.batchAt(i);
 		//每个类别
 		for(int j=0; j<res.size(); ++j) {
 			auto color = randomColor(j);
 
-			for(int k=0; k<res[j].boxs.size(); ++k) {
-				cv::rectangle(resImg, res[j].boxs[k], color, 2);
+			const auto& classRes = res.classAt(j);
+			for(int k=0; k<classRes.boxs.size(); ++k) {
+				cv::rectangle(resImg, classRes.boxs[k], color, 2);
 			}
 
 		}
@@ -52,15 +53,16 @@ void showSegmentRes(const std::vector<cv::Mat>& img, const SegmentResArray& resA
 		
 		cv::Mat resImg = img[i].clone();
 
-		auto& res = resArr[i];
+		auto& res = resArr.batchAt(i);
 		//每个类别
 		for(int j=0; j<res.size(); ++j) {
 			auto color = randomColor(j);
 
-			for(int k=0; k<res[j].masks.size(); ++k) {
-				cv::Mat mask = res[j].masks[k];
-				int roff=res[j].boxs[k].y;
-				int coff=res[j].boxs[k].x;
+			const auto& classRes = res.classAt(j);
+			for(int k=0; k<classRes.masks.size(); ++k) {
+				cv::Mat mask = classRes.masks[k];
+				int roff=classRes.boxs[k].y;
+				int coff=classRes.boxs[k].x;
 				for(int r=0; r<mask.rows; ++r) {
 					for(int c=0; c<mask.cols; ++c) {
 						if(mask.at<uchar>(r, c) > (0.6*255)) {
@@ -69,7 +71,7 @@ void showSegmentRes(const std::vector<cv::Mat>& img, const SegmentResArray& resA
 						}
 					}
 				}
-				cv::rectangle(resImg, res[j].boxs[k], color, 2);
+				cv::rectangle(resImg, classRes.boxs[k], color, 2);
 			}
 
 		}
@@ -325,10 +327,10 @@ int main()
 
 	logInit(Log_Level::debug);
 
-	test();
+	//test();
 
-	//testDetectorCPU();
-	//testSegmenterCPU();
+	testDetectorCPU();
+	testSegmenterCPU();
 	//testDetectorCUDA();
 	//testSegmenterCUDA();
 	//testSegmenterOpenVINO();

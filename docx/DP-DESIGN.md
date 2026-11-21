@@ -46,6 +46,8 @@ flowchart LR
 - `SegmentResArray` 同样按“图像批次 → 类别”组织；每个 `SegmentRes` 的 `boxs`、`scores`、`masks` 按检测项对应。掩膜是 `CV_8UC1` 图像，尺寸对应其检测框区域。
 - 结果框使用原始输入图像坐标。对于 LetterBox 预处理，解析器使用每张图像对应的变换参数反算坐标，并裁剪到原图范围。
 
+两种结果数组均可通过 `results.batchAt(batch)` 获取一个批次，再通过 `batch.classAt(classIndex)` 获取该批次的类别结果；`results.batchClassAt(batch, classIndex)` 可直接获取同一结果。这些方法返回引用，支持修改和只读访问；负数或越界下标会抛出 `std::out_of_range`。仍可使用 `results[batch][classIndex]`、`size()` 和迭代器，但结果数组不再是 `std::vector<std::vector<...>>` 的类型别名。
+
 类别下标与模型类别顺序一致。`classNum` 应与模型输出类别数一致；分数阈值和 NMS 阈值按类别下标配置。未提供的阈值项分别补为 `0.5` 和 `0.4`。
 
 ## 4. 当前默认实现
@@ -78,29 +80,7 @@ flowchart LR
 - 默认 `SimpleLetterBoxConfig` 使用 OpenCV 硬 NMS。`SimpleNmmLetterBoxConfig` 使用 NMM：按分数降序选择种子，将与种子 IoU 大于阈值的候选归组，框坐标按分数加权平均，输出分数取组内最高分。可通过 `yolov8OnnxNmmDetector` 和 `yolov8OnnxNmmSegmenter` 使用 NMM；两类策略的 IoU 阈值通过 `setIouThreshold` 按类别配置，未设置项默认为 `DP_DEFAULT_IOU_THRESHOLD` (`0.4f`)。
 - 这两种解析器依赖上述 YOLOv8 输出布局和浮点数据。输出数量或布局不符合约定时，应使用匹配的解析器或实现新的 Parser。
 
-## 5. 使用示例
-
-```cpp
-#include "yolov8.h"
-
-const int classNum = 2;
-yolov8OnnxDetector detector(
-    classNum,
-    std::vector<float>{0.25f, 0.25f},
-    std::vector<float>{0.45f, 0.45f});
-
-detector.setDeviceType(OnnxLoader::CPU);
-detector.loadModel("model/detect.onnx");
-
-cv::Mat image = cv::imread("test/test.jpg", cv::IMREAD_COLOR);
-DetectResArray results = detector.run(std::vector<cv::Mat>{image});
-
-// results[图像下标][类别下标].boxs / .scores
-```
-
-实例分割使用 `yolov8OnnxSegmenter`，返回 `SegmentResArray`。如模型输入是动态尺寸，应在加载或运行前调用 `setDynamicInputSize` 指定预处理尺寸。完整的设备配置和动态批次示例可参考仓库中的 `demo.cpp`。
-
-## 6. 扩展约定
+## 5. 扩展约定
 
 添加其他模型或任务时，可按需实现并组合以下组件：
 

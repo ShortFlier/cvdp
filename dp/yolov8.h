@@ -90,7 +90,7 @@ public:
 				output, batchIndex, classNum, scoreThresholds, candidatesByClass)) {
 				return DetectResArray();
 			}
-			std::vector<DetectRes> classResults(classNum);
+			ResultBatch<DetectRes> classResults(classNum);
 
 			for (int classIndex = 0; classIndex < classNum; ++classIndex) {
 				const float iouThreshold = classIndex < static_cast<int>(iouThresholds.size())
@@ -185,7 +185,7 @@ public:
 				hasSelectedCandidates = hasSelectedCandidates || !classGroups.empty();
 			}
 
-			std::vector<SegmentRes> classResults(classNum);
+			ResultBatch<SegmentRes> classResults(classNum);
 			if (hasSelectedCandidates) {
 				cv::Mat maskProtos(
 					protoShape,

@@ -102,9 +102,8 @@ public:
 					iouThreshold);
 
 				for (const auto& group : groups) {
-					classResults[classIndex].boxs.push_back(
-						letterboxParseImpl[batchIndex].enRect(group.box));
-					classResults[classIndex].scores.push_back(group.score);
+					classResults[classIndex].push_back({
+						letterboxParseImpl[batchIndex].enRect(group.box), group.score });
 				}
 			}
 
@@ -244,9 +243,8 @@ public:
 							continue;
 						}
 
-						classResults[classIndex].boxs.push_back(finalMask.box);
-						classResults[classIndex].scores.push_back(group.score);
-						classResults[classIndex].masks.push_back(std::move(finalMask.mat));
+						classResults[classIndex].push_back({
+							finalMask.box, group.score, std::move(finalMask.mat) });
 					}
 				}
 			}

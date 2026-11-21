@@ -2,6 +2,8 @@
 
 project("dpdetect")
 
+include(CTest)
+
 enable_language(CXX)
 
 # 如果支持，请为 MSVC 编译器启用热重载。
@@ -74,3 +76,9 @@ add_custom_command(TARGET dpdetect POST_BUILD
     "$<TARGET_FILE_DIR:dpdetect>/"
     COMMENT "Copying ONNX Runtime DLLs to output directory..."
 )
+
+if(BUILD_TESTING)
+    add_executable(result_array_test tests/result_array_test.cpp)
+    target_link_libraries(result_array_test PRIVATE dp ${OPENCV_WORLD_LIB} onnxruntime.lib)
+    add_test(NAME result_array_test COMMAND result_array_test)
+endif()

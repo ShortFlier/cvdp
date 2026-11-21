@@ -34,8 +34,8 @@ void showDetectRes(const std::vector<cv::Mat>& img, const DetectResArray& resArr
 			auto color = randomColor(j);
 
 			const auto& classRes = res.classAt(j);
-			for(int k=0; k<classRes.boxs.size(); ++k) {
-				cv::rectangle(resImg, classRes.boxs[k], color, 2);
+			for(const auto& detection : classRes) {
+				cv::rectangle(resImg, detection.boxs, color, 2);
 			}
 
 		}
@@ -59,10 +59,10 @@ void showSegmentRes(const std::vector<cv::Mat>& img, const SegmentResArray& resA
 			auto color = randomColor(j);
 
 			const auto& classRes = res.classAt(j);
-			for(int k=0; k<classRes.masks.size(); ++k) {
-				cv::Mat mask = classRes.masks[k];
-				int roff=classRes.boxs[k].y;
-				int coff=classRes.boxs[k].x;
+			for(const auto& detection : classRes) {
+				const cv::Mat& mask = detection.masks;
+				int roff=detection.boxs.y;
+				int coff=detection.boxs.x;
 				for(int r=0; r<mask.rows; ++r) {
 					for(int c=0; c<mask.cols; ++c) {
 						if(mask.at<uchar>(r, c) > (0.6*255)) {
@@ -71,7 +71,7 @@ void showSegmentRes(const std::vector<cv::Mat>& img, const SegmentResArray& resA
 						}
 					}
 				}
-				cv::rectangle(resImg, classRes.boxs[k], color, 2);
+				cv::rectangle(resImg, detection.boxs, color, 2);
 			}
 
 		}

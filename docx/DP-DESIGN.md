@@ -42,11 +42,11 @@ flowchart LR
 
 - `TensorInfo` 保存张量名称和形状。模型形状中的 `-1` 表示动态维度。
 - `Tensor` 将 `TensorInfo` 与承载数据的 `cv::Mat` 放在一起。
-- `DetectResArray` 的结构为“图像批次 → 类别 → 检测结果”；每个 `DetectRes` 用平行的 `boxs`、`scores` 数组保存矩形框和分数。
-- `SegmentResArray` 同样按“图像批次 → 类别”组织；每个 `SegmentRes` 的 `boxs`、`scores`、`masks` 按检测项对应。掩膜是 `CV_8UC1` 图像，尺寸对应其检测框区域。
+- `DetectResArray` 的结构为“图像批次 → 类别 → 检测项”；每个 `DetectRes` 保存一个矩形框 `boxs` 和分数 `scores`。
+- `SegmentResArray` 同样按“图像批次 → 类别 → 检测项”组织；每个 `SegmentRes` 保存一个框、分数和掩膜 `masks`。掩膜是 `CV_8UC1` 图像，尺寸对应其检测框区域。
 - 结果框使用原始输入图像坐标。对于 LetterBox 预处理，解析器使用每张图像对应的变换参数反算坐标，并裁剪到原图范围。
 
-两种结果数组均可通过 `results.batchAt(batch)` 获取一个批次，再通过 `batch.classAt(classIndex)` 获取该批次的类别结果；`results.batchClassAt(batch, classIndex)` 可直接获取同一结果。这些方法返回引用，支持修改和只读访问；负数或越界下标会抛出 `std::out_of_range`。仍可使用 `results[batch][classIndex]`、`size()` 和迭代器，但结果数组不再是 `std::vector<std::vector<...>>` 的类型别名。
+两种结果数组均可通过 `results.batchAt(batch)` 获取一个批次，再通过 `batch.classAt(classIndex)` 获取该批次的类别结果向量；`results.batchClassAt(batch, classIndex)` 可直接获取同一向量。这些方法返回引用，支持修改和只读访问；负数或越界下标会抛出 `std::out_of_range`。仍可使用 `results[batch][classIndex]`、`size()` 和迭代器。
 
 类别下标与模型类别顺序一致。`classNum` 应与模型输出类别数一致；分数阈值和 NMS 阈值按类别下标配置。未提供的阈值项分别补为 `0.5` 和 `0.4`。
 

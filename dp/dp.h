@@ -22,37 +22,37 @@
 
 NAMESPACE_DP_BEGIN
 /*
-	检测结果结构体，包含该类别的所有检测框和分数
-	boxs：检测框坐标数组
-	scores：检测分数数组
+	单个检测结果
+	boxs：检测框坐标
+	scores：检测分数
 */
 struct DetectRes
 {
-	std::vector<cv::Rect> boxs;
-	std::vector<float> scores;
+	cv::Rect boxs;
+	float scores;
 };
 /*
-	分割结果结构体，包含该类别的所有检测框、分数和掩膜
-	boxs：检测框坐标数组
-	scores：检测分数数组
-	masks：分割掩膜数组，大小为对应box区域的大小
+	单个分割结果
+	boxs：检测框坐标
+	scores：检测分数
+	masks：分割掩膜，大小为对应box区域的大小
 */
 struct SegmentRes {
-	std::vector<cv::Rect> boxs;
-	std::vector<float> scores;
-	std::vector<cv::Mat> masks;//Mask为box区域的掩膜
-
+	cv::Rect boxs;
+	float scores;
+	cv::Mat masks;//Mask为box区域的掩膜
 };
 template<typename Result>
-class ResultBatch : public std::vector<Result> {
+class ResultBatch : public std::vector<std::vector<Result>> {
 public:
-	using std::vector<Result>::vector;
+	using ClassResults = std::vector<Result>;
+	using std::vector<ClassResults>::vector;
 
-	Result& classAt(int classIndex) {
+	ClassResults& classAt(int classIndex) {
 		return this->at(classIndex);
 	}
 
-	const Result& classAt(int classIndex) const {
+	const ClassResults& classAt(int classIndex) const {
 		return this->at(classIndex);
 	}
 };
@@ -61,6 +61,7 @@ template<typename Result>
 class ResultArray : public std::vector<ResultBatch<Result>> {
 public:
 	using Batch = ResultBatch<Result>;
+	using ClassResults = typename Batch::ClassResults;
 	using std::vector<Batch>::vector;
 
 	Batch& batchAt(int batchIndex) {
@@ -71,16 +72,16 @@ public:
 		return this->at(batchIndex);
 	}
 
-	Result& batchClassAt(int batchIndex, int classIndex) {
+	ClassResults& batchClassAt(int batchIndex, int classIndex) {
 		return batchAt(batchIndex).classAt(classIndex);
 	}
 
-	const Result& batchClassAt(int batchIndex, int classIndex) const {
+	const ClassResults& batchClassAt(int batchIndex, int classIndex) const {
 		return batchAt(batchIndex).classAt(classIndex);
 	}
 };
 
-// 结果按图像批次、类别组织
+// 结果按图像批次、类别、检测项组织
 using DetectResArray = ResultArray<DetectRes>;
 using SegmentResArray = ResultArray<SegmentRes>;
 

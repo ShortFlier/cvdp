@@ -21,9 +21,9 @@ set(OPENCV_WORLD_LIB
     $<$<NOT:$<CONFIG:Debug>>:opencv_world480.lib>
 )
 
-# spdlog 头文件包含形式，可以预编译spdlog库
-set(SPDLOG_DIR "D:/gw/clib/spdlog/spdlog-1.15.1/include")
-include_directories(${SPDLOG_DIR})
+# spdlog
+find_package(spdlog CONFIG REQUIRED
+    HINTS "D:/gw/clib/spdlog/spdlog-1.15.1/bulid/install/lib/cmake/spdlog")
 
 # onnxruntime c++ CPU
 # set(ONNX_DLL_DIR "D:/gw/clib/onnxruntime-win-x64-gpu-1.24.1/lib")
@@ -59,7 +59,7 @@ target_link_libraries(dpdetect PRIVATE
     onnxruntime_providers_shared.lib
 )
 
-target_compile_definitions(dpdetect PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
+#target_compile_definitions(dpdetect PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
 
 # 拷贝dll到exe文件目录
 add_custom_command(TARGET dpdetect POST_BUILD

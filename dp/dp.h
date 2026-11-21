@@ -293,28 +293,27 @@ class _DPBase:nocopy{
 			ELAPSED("DP总推理",
 
 				//图像预处理
-				log_info("执行图像预处理");
+				log_info("DP图像预处理");
 				typename _Preprocessor::ParseImplType parseImpl;
-				std::vector<Tensor> inputDatas = _preprocessor(srcMats, _inputTensorInfos, _dynamicInputSize, parseImpl);
+				std::vector<Tensor> inputDatas;
+				ELAPSED("DP图像预处理", inputDatas = _preprocessor(srcMats, _inputTensorInfos, _dynamicInputSize, parseImpl), log_debug);
 
-				log_debug("图像预处理完成，输入张量数量: {0}", inputDatas.size());
 				for (size_t i = 0; i < inputDatas.size(); ++i) {
-					log_debug("输入张量{0}, {1}: [{2}]", i, inputDatas[i].info.name, fmt::join(inputDatas[i].info.shape, ","));
+					log_debug("DP图像预处理, 输入张量{0}, {1}: [{2}]", i, inputDatas[i].info.name, fmt::join(inputDatas[i].info.shape, ","));
 				}
 
 				//运行
-				log_info("执行模型推理");
+				log_info("DP模型推理");
 				std::vector<Tensor> resTensor;
 				ELAPSED("DP模型推理", resTensor = _runner(_modelLoader.get(), inputDatas), log_debug);
 
-				log_debug("模型推理完成，输出张量数量: {0}", resTensor.size());
 				for (size_t i = 0; i < resTensor.size(); ++i) {
-					log_debug("输出张量{0}, {1}: [{2}]", i, resTensor[i].info.name, fmt::join(resTensor[i].info.shape, ","));
+					log_debug("DP模型推理, 输出张量{0}, {1}: [{2}]", i, resTensor[i].info.name, fmt::join(resTensor[i].info.shape, ","));
 				}
 
 				//解析结果
 				log_info("DP解析结果");
-				ELAPSED("结果解析", res = _parser(resTensor, parseImpl, _classNum, _scoreThreshs), log_debug);
+				ELAPSED("DP解析结果", res = _parser(resTensor, parseImpl, _classNum, _scoreThreshs), log_debug);
 			, log_info);
 
 			return res;

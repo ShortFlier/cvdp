@@ -294,14 +294,41 @@ void compareDynAndSta(){
 	}
 }
 
+
+void test(){
+	const char* modelPath=R"(test\mdi\model\best.onnx)";
+	const char* imgPath=R"(test\mdi\testimg\20261108_074042_601_004.png)";
+	const int classNum=12;
+	cv::Size size(640, 640);
+
+	cv::Mat mat=cv::imread(imgPath, cv::IMREAD_COLOR);
+
+	yolov8OnnxSegmenter segmenter(classNum);
+	segmenter.setDeviceType(dp::OnnxLoader::CPU);
+	segmenter.setDynamicInputSize(size);
+	segmenter.loadModel(modelPath);
+
+	typename decltype(segmenter._preprocessor)::ParseImplType parseImpl;
+
+	auto __start = std::chrono::high_resolution_clock::now();
+	std::vector<Tensor> inputDatas = segmenter._preprocessor({mat}, segmenter._inputTensorInfos, size, parseImpl);
+	auto __end = std::chrono::high_resolution_clock::now();
+	auto __duration = std::chrono::duration_cast<std::chrono::microseconds>(__end - __start).count();
+    log_info("耗时：{0}ms", __duration / 1000.0); 
+
+	segmenter.run({mat});
+}
+
 int main()
 {
 	SetConsoleOutputCP(CP_UTF8);
 
 	logInit(Log_Level::debug);
 
+	test();
+
 	//testDetectorCPU();
-	testSegmenterCPU();
+	//testSegmenterCPU();
 	//testDetectorCUDA();
 	//testSegmenterCUDA();
 	//testSegmenterOpenVINO();
